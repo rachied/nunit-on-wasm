@@ -1,0 +1,119 @@
+﻿@page "/playground"
+@using Microsoft.CodeAnalysis.CSharp
+@using Microsoft.CodeAnalysis
+<h3>Playground</h3>
+
+
+<textarea>
+</textarea>
+
+<button>Run</button>
+
+@code {
+
+    private string sourceCode = string.Empty;
+
+    public HashSet<PortableExecutableReference> References { get; set; } =
+        new HashSet<PortableExecutableReference>();
+    
+    public void CompileAndRun()
+    {
+        AddNetCoreDefaultReferences();
+        AddAssembly("System.Net.WebClient.dll");
+        
+        var tree = SyntaxFactory.ParseSyntaxTree(sourceCode.Trim());
+        var compilation = CSharpCompilation.Create("Program.cs")
+            .WithOptions(new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary,
+                optimizationLevel: OptimizationLevel.Release))
+            .WithReferences(References)
+            .AddSyntaxTrees(tree);
+    }
+    
+    public bool AddAssembly(Type type)
+    {
+        try
+        {
+            if (References.Any(r => r.FilePath == type.Assembly.Location))
+                return true;
+
+            var systemReference = MetadataReference.CreateFromFile(type.Assembly.Location);
+            References.Add(systemReference);
+        }
+        catch
+        {
+            return false;
+        }
+
+        return true;
+    }
+    
+    /// <summary>
+    /// Adds an assembly from disk. Provide a full path if possible
+    /// or a path that can resolve as part of the application folder
+    /// or the runtime folder.
+    /// </summary>
+    /// <param name="assemblyDll">assembly DLL name. Path is required if not in startup or .NET assembly folder</param>
+    public bool AddAssembly(string assemblyDll)
+    {
+        if (string.IsNullOrEmpty(assemblyDll)) return false;
+
+        var file = Path.GetFullPath(assemblyDll);
+
+        if (!File.Exists(file))
+        {
+            // check framework or dedicated runtime app folder
+            var path = Path.GetDirectoryName(typeof(object).Assembly.Location);
+            file = Path.Combine(path, assemblyDll);
+            if (!File.Exists(file))
+                return false;
+        }
+
+        if (References.Any(r => r.FilePath == file)) return true;
+
+        try
+        {
+            var reference = MetadataReference.CreateFromFile(file);
+            References.Add(reference);
+        }
+        catch
+        {
+            return false;
+        }
+
+        return true;
+    }
+    
+    public void AddAssemblies(params string[] assemblies)
+    {
+        foreach (var file in assemblies)
+            AddAssembly(file);
+    }
+    
+    public void AddNetCoreDefaultReferences()
+    {
+        var rtPath = Path.GetDirectoryName(typeof(object).Assembly.Location) +
+                     Path.DirectorySeparatorChar;
+
+        AddAssemblies(
+            rtPath + "System.Private.CoreLib.dll",
+            rtPath + "System.Runtime.dll",
+            rtPath + "System.Console.dll",
+            rtPath + "netstandard.dll",
+
+            rtPath + "System.Text.RegularExpressions.dll", // IMPORTANT!
+            rtPath + "System.Linq.dll",
+            rtPath + "System.Linq.Expressions.dll", // IMPORTANT!
+
+            rtPath + "System.IO.dll",
+            rtPath + "System.Net.Primitives.dll",
+            rtPath + "System.Net.Http.dll",
+            rtPath + "System.Private.Uri.dll",
+            rtPath + "System.Reflection.dll",
+            rtPath + "System.ComponentModel.Primitives.dll",
+            rtPath + "System.Globalization.dll",
+            rtPath + "System.Collections.Concurrent.dll",
+            rtPath + "System.Collections.NonGeneric.dll",
+            rtPath + "Microsoft.CSharp.dll"
+            );
+    }
+}
