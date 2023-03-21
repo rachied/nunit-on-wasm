@@ -4,6 +4,8 @@
 @using Microsoft.CodeAnalysis.Emit
 @using System.Reflection
 @using System.Text
+@using NUnit
+@using NUnit.Framework.Api
 <h3>Playground</h3>
 
 
@@ -15,21 +17,28 @@
 @code {
 
     [Inject]
+    public IJSRuntime JsRuntime { get; set; }
+
+    [Inject]
     public HttpClient HttpClient { get; set; }
     
     private List<Stream> LibStreams = new();
     
     private string sourceCode = @"using System;
+using NUnit.Framework;
+using NUnitLite;
 
-namespace PlaygroundExecution {
-public class Program { 
+namespace PlaygroundExecution;
 
-    public int Main(string[] args)
+public class UnitTests
+{
+    [Test]
+    public void MyPassingTestCase()
     {
-        return 42;
+        Assert.True(false);
     }
-
-} }";
+}
+";
 
     List<MetadataReference> References = new();
 
@@ -37,8 +46,8 @@ public class Program {
     {
         await AddNetCoreDefaultReferences();
         
-        var compilationOptions = new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, concurrentBuild: false)
-            .WithUsings("System", "System.Text", "System.Collections.Generic", "System.IO", "System.Linq", "System.Threading", "System.Threading.Tasks");
+        // var compilationOptions = new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, concurrentBuild: false)
+        //     .WithUsings("System", "System.Text", "System.Collections.Generic", "System.IO", "System.Linq", "System.Threading", "System.Threading.Tasks");
         
         var tree = SyntaxFactory.ParseSyntaxTree(sourceCode.Trim());
         var compilation = CSharpCompilation.Create("Program.cs")
@@ -46,19 +55,16 @@ public class Program {
                 optimizationLevel: OptimizationLevel.Release))
             .WithReferences(References)
             .AddSyntaxTrees(tree);
+
+        Assembly? assembly = null;
         
-        string errorMessage = null;
-        Assembly assembly = null;
-
-        bool isFileAssembly = false;
-        Stream codeStream = null;
-        using (codeStream = new MemoryStream())
+        Stream codeStream;
+        await using (codeStream = new MemoryStream())
         {
-    // Actually compile the code
-            EmitResult compilationResult = null;
-            compilationResult = compilation.Emit(codeStream);
+            // Actually compile the code
+            var compilationResult = compilation.Emit(codeStream);
 
-    // Compilation Error handling
+            // Compilation Error handling
             if (!compilationResult.Success)
             {
                 var sb = new StringBuilder();
@@ -66,7 +72,7 @@ public class Program {
                 {
                     sb.AppendLine(diag.ToString());
                 }
-                errorMessage = sb.ToString();
+                var errorMessage = sb.ToString();
 
                 if (errorMessage.Length > 0)
                 {
@@ -77,22 +83,47 @@ public class Program {
             }
     
     // Load
-            assembly = Assembly.Load(((MemoryStream)codeStream).ToArray());
+            assembly = Assembly.Load(((MemoryStream) codeStream).ToArray());
+            await using var ms = (MemoryStream) codeStream;
+            await using (var file = new FileStream("Program.dll", FileMode.Create, System.IO.FileAccess.Write)) {
+                var bytes = new byte[ms.Length];
+                ms.Read(bytes, 0, (int)ms.Length);
+                file.Write(bytes, 0, bytes.Length);
+                ms.Close();
+            }
+        }
+
+        if (assembly is null)
+        {
+            throw new ApplicationException("Generated TestCase Assembly is null");
         }
 
     // Instantiate
-        dynamic instance = assembly.CreateInstance("PlaygroundExecution.Program");
+        // dynamic instance = assembly.CreateInstance("PlaygroundExecution.Program");
 
     // Call
-        var result = instance.Main(null);
+        // var result = instance.Main(null);
+        //
+        // Console.WriteLine("Roslyn execution returned: " + result);
         
-        Console.WriteLine("Roslyn execution returned: " + result);
+        var builder = new DefaultTestAssemblyBuilder();
+        var runner = new NUnitTestAssemblyRunner(builder);
+        runner.Load("Program.dll", new Dictionary<string, object>()
+        {
+    //https://github.com/nunit/nunit/issues/2922
+            [FrameworkPackageSettings.NumberOfTestWorkers] = 0,
+            [FrameworkPackageSettings.SynchronousEvents] = true,
+            [FrameworkPackageSettings.RunOnMainThread] = true
+        });
+        
+        runner.Run(new TestListener(JsRuntime), null);
     }
 
     public async Task AddNetCoreDefaultReferences()
     {
         string[] defaultLibs =
         {
+            "/_framework/netstandard.dll",
             "/_framework/System.dll",
             "/_framework/System.Buffers.dll",
             "/_framework/System.Collections.dll",
@@ -103,7 +134,9 @@ public class Program {
             "/_framework/System.Linq.Expressions.dll",
             "/_framework/System.Linq.Parallel.dll",
             "/_framework/mscorlib.dll",
-            "/_framework/System.Private.CoreLib.dll"
+            "/_framework/System.Private.CoreLib.dll",
+            "/_framework/NUnitLite.dll",
+            "/_framework/NUnit.Framework.dll"
         };
         
         List<string> libraries = new (defaultLibs);
