@@ -42,9 +42,18 @@ namespace PlaygroundExecution {
     public class Program
     {
         [Test]
-        public void Test1()
+        public void SimpleTest()
         {
             Assert.That(1 == 1);
+        }
+
+        [TestCase(10,10)]
+        [TestCase(20,200)]
+        [TestCase(30,30)]
+        [TestCase(40,40)]
+        public void Parameterized_Test(int a, int b)
+        {
+            Assert.That(a == b);
         }
  } }";
 
@@ -127,7 +136,7 @@ namespace PlaygroundExecution {
     
     public int RunTestsCustom(Assembly assembly)
     {
-        var args = new string[] { "--noresult", "--stoponerror", "--labels=ON" };
+        var args = new string[] { "--noresult", "--labels=ON" };
         var writer = new ExtendedTextWrapper(Console.Out);
         var result = new WasmRunner(assembly).Execute(writer, TextReader.Null, args);
         
