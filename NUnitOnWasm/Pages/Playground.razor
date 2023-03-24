@@ -6,6 +6,7 @@
 @using System.Text
 @using NUnit.Common
 @using NUnitLite
+@using NUnitOnWasm.TestRunner
 <h3>Playground</h3>
 
 
@@ -32,13 +33,28 @@ public class Program {
     }
 
 } }";
+    
+    private string _testCode = @"using System;
+using NUnit.Framework;
+
+namespace PlaygroundExecution {
+    [TestFixture]
+    public class Program
+    {
+        [Test]
+        public void Test1()
+        {
+            Assert.That(1 == 1);
+        }
+ } }";
 
     List<MetadataReference> References = new();
 
     public async Task CompileAndRun()
     {
-        var assembly = await CompileToAssembly(_sourceCode);
-        var result = RunEntryPoint(assembly);
+        // new MyTestRunner().Run();
+        var assembly = await CompileToAssembly(_testCode);
+        var result = RunTestsCustom(assembly);
     }
 
     public async Task<Assembly> CompileToAssembly(string sourceCode)
@@ -99,12 +115,25 @@ public class Program {
         return result;
     }
 
-    public void RunTests(Assembly assembly)
+    public int RunTests(Assembly assembly)
     {
         var writer = new ExtendedTextWrapper(Console.Out);
-        var result = new AutoRun(assembly).Execute(new string[] { "--noresult", "--stoponerror", "--labels=ON" }, writer, Console.In);
+        var result = new AutoRun(assembly).Execute(new string[] { "--noresult", "--stoponerror", "--labels=ON" }, writer, TextReader.Null);
         
         Console.WriteLine("NUnitLite execution returned: " + result);
+
+        return result;
+    }
+    
+    public int RunTestsCustom(Assembly assembly)
+    {
+        var args = new string[] { "--noresult", "--stoponerror", "--labels=ON" };
+        var writer = new ExtendedTextWrapper(Console.Out);
+        var result = new WasmRunner(assembly).Execute(writer, TextReader.Null, args);
+        
+        Console.WriteLine("NUnitLite execution returned: " + result);
+
+        return result;
     }
 
     public async Task AddNetCoreDefaultReferences()
@@ -121,7 +150,9 @@ public class Program {
             "/_framework/System.Linq.Expressions.dll",
             "/_framework/System.Linq.Parallel.dll",
             "/_framework/mscorlib.dll",
-            "/_framework/System.Private.CoreLib.dll"
+            "/_framework/netstandard.dll",
+            "/_framework/System.Private.CoreLib.dll",
+            "/_framework/NUnit.Framework.dll",
         };
         
         List<string> libraries = new (defaultLibs);
