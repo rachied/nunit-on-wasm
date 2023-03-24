@@ -4,6 +4,8 @@
 @using Microsoft.CodeAnalysis.Emit
 @using System.Reflection
 @using System.Text
+@using NUnit.Common
+@using NUnitLite
 <h3>Playground</h3>
 
 
@@ -19,7 +21,7 @@
     
     private List<Stream> LibStreams = new();
     
-    private string sourceCode = @"using System;
+    private string _sourceCode = @"using System;
 
 namespace PlaygroundExecution {
 public class Program { 
@@ -35,58 +37,74 @@ public class Program {
 
     public async Task CompileAndRun()
     {
+        var assembly = await CompileToAssembly(_sourceCode);
+        var result = RunEntryPoint(assembly);
+    }
+
+    public async Task<Assembly> CompileToAssembly(string sourceCode)
+    {
         await AddNetCoreDefaultReferences();
         
-        var compilationOptions = new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, concurrentBuild: false)
+        var compilationOptions = new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, concurrentBuild: false, optimizationLevel: OptimizationLevel.Release)
             .WithUsings("System", "System.Text", "System.Collections.Generic", "System.IO", "System.Linq", "System.Threading", "System.Threading.Tasks");
         
         var tree = SyntaxFactory.ParseSyntaxTree(sourceCode.Trim());
         var compilation = CSharpCompilation.Create("Program.cs")
-            .WithOptions(new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary,
-                optimizationLevel: OptimizationLevel.Release))
+            .WithOptions(compilationOptions)
             .WithReferences(References)
             .AddSyntaxTrees(tree);
-        
-        string errorMessage = null;
-        Assembly assembly = null;
 
-        bool isFileAssembly = false;
-        Stream codeStream = null;
-        using (codeStream = new MemoryStream())
+        Stream codeStream;
+        await using (codeStream = new MemoryStream())
         {
-    // Actually compile the code
-            EmitResult compilationResult = null;
-            compilationResult = compilation.Emit(codeStream);
+            // Actually compile the code
+            var compilationResult = compilation.Emit(codeStream);
 
-    // Compilation Error handling
+            // Compilation Error handling
             if (!compilationResult.Success)
             {
-                var sb = new StringBuilder();
-                foreach (var diag in compilationResult.Diagnostics)
-                {
-                    sb.AppendLine(diag.ToString());
-                }
-                errorMessage = sb.ToString();
-
-                if (errorMessage.Length > 0)
-                {
-                    throw new ApplicationException(errorMessage);
-                }
-
-                return;
+                OnCompilationError(compilationResult);
             }
     
-    // Load
-            assembly = Assembly.Load(((MemoryStream)codeStream).ToArray());
+            // Load
+            return Assembly.Load(((MemoryStream)codeStream).ToArray());
+        }
+    }
+
+    public void OnCompilationError(EmitResult compilationResult)
+    {
+        var sb = new StringBuilder();
+        foreach (var diag in compilationResult.Diagnostics)
+        {
+            sb.AppendLine(diag.ToString());
+        }
+        var errorMessage = sb.ToString();
+
+        if (errorMessage.Length > 0)
+        {
+            throw new ApplicationException(errorMessage);
         }
 
-    // Instantiate
-        dynamic instance = assembly.CreateInstance("PlaygroundExecution.Program");
+        return;
+    }
 
-    // Call
-        var result = instance.Main(null);
+    public dynamic RunEntryPoint(Assembly assembly, string[] args = null)
+    {
+        dynamic instance = assembly.CreateInstance("PlaygroundExecution.Program");
+        
+        var result = instance.Main(args);
         
         Console.WriteLine("Roslyn execution returned: " + result);
+
+        return result;
+    }
+
+    public void RunTests(Assembly assembly)
+    {
+        var writer = new ExtendedTextWrapper(Console.Out);
+        var result = new AutoRun(assembly).Execute(new string[] { "--noresult", "--stoponerror", "--labels=ON" }, writer, Console.In);
+        
+        Console.WriteLine("NUnitLite execution returned: " + result);
     }
 
     public async Task AddNetCoreDefaultReferences()
