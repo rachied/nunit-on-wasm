@@ -317,6 +317,10 @@ namespace NUnitOnWasm.TestRunner
             if (options.TestParameters.Count != 0)
                 runSettings[FrameworkPackageSettings.TestParametersDictionary] = options.TestParameters;
 
+            runSettings[FrameworkPackageSettings.NumberOfTestWorkers] = 0;
+            runSettings[FrameworkPackageSettings.SynchronousEvents] = true;
+            runSettings[FrameworkPackageSettings.RunOnMainThread] = true;
+            
             return runSettings;
         }
 

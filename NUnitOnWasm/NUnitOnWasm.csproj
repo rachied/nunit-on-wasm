@@ -11,13 +11,22 @@
         <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="7.0.1" />
         <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="7.0.1" PrivateAssets="all" />
         <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.6.0-1.final" />
-        <PackageReference Include="NUnitLite" Version="3.13.3" />
     </ItemGroup>
 
     <ItemGroup>
       <Content Include="..\.dockerignore">
         <Link>.dockerignore</Link>
       </Content>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Reference Include="nunitlite.dll">
+            <HintPath>lib\nunitlite.dll</HintPath>
+        </Reference>
+
+        <Reference Include="nunit.framework.dll">
+            <HintPath>lib\nunit.framework.dll</HintPath>
+        </Reference>
     </ItemGroup>
 
 </Project>
