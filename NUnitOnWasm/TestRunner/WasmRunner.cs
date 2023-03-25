@@ -320,6 +320,8 @@ namespace NUnitOnWasm.TestRunner
             runSettings[FrameworkPackageSettings.NumberOfTestWorkers] = 0;
             runSettings[FrameworkPackageSettings.SynchronousEvents] = true;
             runSettings[FrameworkPackageSettings.RunOnMainThread] = true;
+            runSettings[FrameworkPackageSettings.DefaultTimeout] = -1;
+            runSettings[FrameworkPackageSettings.StopOnError] = true;
             
             return runSettings;
         }

@@ -17,6 +17,9 @@
 
 @code {
 
+    [Inject] 
+    public IJSRuntime JsRuntime { get; set; }
+
     [Inject]
     public HttpClient HttpClient { get; set; }
     
@@ -36,6 +39,7 @@ public class Program {
     
     private string _testCode = @"using System;
 using NUnit.Framework;
+using System.Threading;
 
 namespace PlaygroundExecution {
     [TestFixture]
@@ -47,15 +51,31 @@ namespace PlaygroundExecution {
             Assert.That(1 == 1);
         }
 
-        [TestCase(10,10)]
-        [TestCase(20,200)]
-        [TestCase(30,30)]
         [TestCase(40,40)]
         public void Parameterized_Test(int a, int b)
         {
             Assert.That(a == b);
         }
- } }";
+ }
+
+    [TestFixture]
+    public class AnotherClass
+    {
+        [Test]
+        public void DummyTest()
+        {
+            Assert.That(1 == 1);
+        }
+
+        [TestCase(40,40)]
+        [TestCase(10,10)]
+        public void DummyTestTwo(int a, int b)
+        {
+            Assert.That(a == b);
+        }
+ }
+
+ }";
 
     List<MetadataReference> References = new();
 
@@ -88,7 +108,7 @@ namespace PlaygroundExecution {
             // Compilation Error handling
             if (!compilationResult.Success)
             {
-                OnCompilationError(compilationResult);
+                await OnCompilationError(compilationResult);
             }
     
             // Load
@@ -96,9 +116,9 @@ namespace PlaygroundExecution {
         }
     }
 
-    public void OnCompilationError(EmitResult compilationResult)
+    public async Task OnCompilationError(EmitResult compilationResult)
     {
-        var sb = new StringBuilder();
+        var sb = new StringBuilder("Build failed\n");
         foreach (var diag in compilationResult.Diagnostics)
         {
             sb.AppendLine(diag.ToString());
@@ -107,10 +127,9 @@ namespace PlaygroundExecution {
 
         if (errorMessage.Length > 0)
         {
+            await JsRuntime.InvokeVoidAsync("alert", errorMessage);
             throw new ApplicationException(errorMessage);
         }
-
-        return;
     }
 
     public dynamic RunEntryPoint(Assembly assembly, string[] args = null)
