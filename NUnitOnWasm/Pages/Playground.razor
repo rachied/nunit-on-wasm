@@ -1,12 +1,12 @@
-﻿@page "/playground"
+﻿@page "/"
+@page "/playground"
 @using Microsoft.CodeAnalysis.CSharp
 @using Microsoft.CodeAnalysis
 @using Microsoft.CodeAnalysis.Emit
 @using System.Reflection
 @using System.Text
-@using NUnit.Common
-@using NUnitLite
 @using NUnitOnWasm.TestRunner
+
 <h3>Playground</h3>
 
 <button onclick="@(async () => await CompileAndRun())">Run</button>
@@ -61,7 +61,7 @@ namespace PlaygroundExecution
     {
         var code = await _editor.GetValue();
         var assembly = await CompileToAssembly(code);
-        var result = RunTestsCustom(assembly);
+        var result = RunTests(assembly);
 
         var msg = result switch {
             0 => "All tests passed, nice!",
@@ -118,41 +118,17 @@ namespace PlaygroundExecution
         }
     }
 
-    private async Task Alert(string message)
-    {
-        await JsRuntime.InvokeVoidAsync("alert", message);
-    }
-
-    public dynamic RunEntryPoint(Assembly assembly, string[] args = null)
-    {
-        dynamic instance = assembly.CreateInstance("PlaygroundExecution.Program");
-        
-        var result = instance.Main(args);
-        
-        Console.WriteLine("Roslyn execution returned: " + result);
-
-        return result;
-    }
-
+    private async Task Alert(string message) => await JsRuntime.InvokeVoidAsync("alert", message);
+    
     public int RunTests(Assembly assembly)
     {
-        var writer = new ExtendedTextWrapper(Console.Out);
-        var result = new AutoRun(assembly).Execute(new string[] { "--noresult", "--stoponerror", "--labels=ON" }, writer, TextReader.Null);
-        
-        Console.WriteLine("NUnitLite execution returned: " + result);
+        var runner = new AssemblyTestListener(assembly);
+        runner.Run();
 
-        return result;
-    }
-    
-    public int RunTestsCustom(Assembly assembly)
-    {
-        var args = new[] { "--noresult", "--labels=ON" };
-        var writer = new ExtendedTextWrapper(Console.Out);
-        var result = new WasmRunner(assembly).Execute(writer, TextReader.Null, args);
-        
-        Console.WriteLine("NUnitLite execution returned: " + result);
+        if (runner.Result is null || runner.Result.TotalCount == 0)
+            return -1;
 
-        return result;
+        return runner.Result.FailCount == 0 ? 0 : 1;
     }
 
     public async Task AddNetCoreDefaultReferences()
