@@ -316,6 +316,11 @@ namespace NUnitOnWasm.TestRunner
 
             if (options.TestParameters.Count != 0)
                 runSettings[FrameworkPackageSettings.TestParametersDictionary] = options.TestParameters;
+            
+            // Required on WASM https://github.com/nunit/nunit/issues/2922
+            runSettings[FrameworkPackageSettings.NumberOfTestWorkers] = 0;
+            runSettings[FrameworkPackageSettings.SynchronousEvents] = true;
+            runSettings[FrameworkPackageSettings.RunOnMainThread] = true;
 
             return runSettings;
         }

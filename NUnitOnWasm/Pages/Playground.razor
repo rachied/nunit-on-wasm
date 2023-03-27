@@ -22,33 +22,21 @@
     
     private List<Stream> LibStreams = new();
     
-    private string _sourceCode = @"using System;
+    private List<MetadataReference> References = new();
 
-namespace PlaygroundExecution {
-public class Program { 
-
-    public int Main(string[] args)
-    {
-        return 42;
-    }
-
-} }";
-    
     private string _testCode = @"using System;
 using NUnit.Framework;
 
 namespace PlaygroundExecution {
     [TestFixture]
-    public class Program
+    public class Tests
     {
         [Test]
-        public void Test1()
+        public void PassingTest()
         {
             Assert.That(1 == 1);
         }
  } }";
-
-    List<MetadataReference> References = new();
 
     public async Task CompileAndRun()
     {
@@ -100,29 +88,6 @@ namespace PlaygroundExecution {
         {
             throw new ApplicationException(errorMessage);
         }
-
-        return;
-    }
-
-    public dynamic RunEntryPoint(Assembly assembly, string[] args = null)
-    {
-        dynamic instance = assembly.CreateInstance("PlaygroundExecution.Program");
-        
-        var result = instance.Main(args);
-        
-        Console.WriteLine("Roslyn execution returned: " + result);
-
-        return result;
-    }
-
-    public int RunTests(Assembly assembly)
-    {
-        var writer = new ExtendedTextWrapper(Console.Out);
-        var result = new AutoRun(assembly).Execute(new string[] { "--noresult", "--stoponerror", "--labels=ON" }, writer, TextReader.Null);
-        
-        Console.WriteLine("NUnitLite execution returned: " + result);
-
-        return result;
     }
     
     public int RunTestsCustom(Assembly assembly)
