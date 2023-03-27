@@ -9,11 +9,8 @@
 @using NUnitOnWasm.TestRunner
 <h3>Playground</h3>
 
-
-<textarea>
-</textarea>
-
 <button onclick="@(async () => await CompileAndRun())">Run</button>
+<StandaloneCodeEditor @ref="_editor" Id="code-editor" ConstructionOptions="EditorConstructionOptions" />
 
 @code {
 
@@ -23,30 +20,19 @@
     [Inject]
     public HttpClient HttpClient { get; set; }
     
-    private List<Stream> LibStreams = new();
-    
-    private string _sourceCode = @"using System;
+    private StandaloneCodeEditor _editor { get; set; }
 
-namespace PlaygroundExecution {
-public class Program { 
-
-    public int Main(string[] args)
-    {
-        return 42;
-    }
-
-} }";
-    
     private string _testCode = @"using System;
 using NUnit.Framework;
 using System.Threading;
 
-namespace PlaygroundExecution {
+namespace PlaygroundExecution 
+{
     [TestFixture]
-    public class Program
+    public class UnitTests
     {
         [Test]
-        public void SimpleTest()
+        public void PassingTest()
         {
             Assert.That(1 == 1);
         }
@@ -56,34 +42,34 @@ namespace PlaygroundExecution {
         {
             Assert.That(a == b);
         }
- }
-
-    [TestFixture]
-    public class AnotherClass
-    {
-        [Test]
-        public void DummyTest()
-        {
-            Assert.That(1 == 1);
-        }
-
-        [TestCase(40,40)]
-        [TestCase(10,10)]
-        public void DummyTestTwo(int a, int b)
-        {
-            Assert.That(a == b);
-        }
- }
-
- }";
+    }
+}";
 
     List<MetadataReference> References = new();
+    
+    private StandaloneEditorConstructionOptions EditorConstructionOptions(StandaloneCodeEditor editor)
+    {
+        return new StandaloneEditorConstructionOptions
+        {
+            AutomaticLayout = true,
+            Language = "csharp",
+            Value = _testCode,
+        };
+    }
 
     public async Task CompileAndRun()
     {
-        // new MyTestRunner().Run();
-        var assembly = await CompileToAssembly(_testCode);
+        var code = await _editor.GetValue();
+        var assembly = await CompileToAssembly(code);
         var result = RunTestsCustom(assembly);
+
+        var msg = result switch {
+            0 => "All tests passed, nice!",
+            1 => "One or more tests failed",
+            _ => $"An unexpected error occurred, resultCode={result}",
+            };
+
+        await Alert(msg);
     }
 
     public async Task<Assembly> CompileToAssembly(string sourceCode)
@@ -127,9 +113,14 @@ namespace PlaygroundExecution {
 
         if (errorMessage.Length > 0)
         {
-            await JsRuntime.InvokeVoidAsync("alert", errorMessage);
+            await Alert(errorMessage);
             throw new ApplicationException(errorMessage);
         }
+    }
+
+    private async Task Alert(string message)
+    {
+        await JsRuntime.InvokeVoidAsync("alert", message);
     }
 
     public dynamic RunEntryPoint(Assembly assembly, string[] args = null)
@@ -155,7 +146,7 @@ namespace PlaygroundExecution {
     
     public int RunTestsCustom(Assembly assembly)
     {
-        var args = new string[] { "--noresult", "--labels=ON" };
+        var args = new[] { "--noresult", "--labels=ON" };
         var writer = new ExtendedTextWrapper(Console.Out);
         var result = new WasmRunner(assembly).Execute(writer, TextReader.Null, args);
         
@@ -187,8 +178,7 @@ namespace PlaygroundExecution {
 
         foreach (var libPath in libraries)
         {
-            var referenceStream = await HttpClient.GetStreamAsync(libPath);
-            LibStreams.Add(referenceStream);
+            await using var referenceStream = await HttpClient.GetStreamAsync(libPath);
             References.Add(MetadataReference.CreateFromStream(referenceStream));
         }
     }
