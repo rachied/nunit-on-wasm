@@ -4,7 +4,7 @@
 @using Microsoft.CodeAnalysis
 @using Microsoft.CodeAnalysis.Emit
 @using System.Reflection
-@using System.Text
+@using NUnit.Framework.Interfaces
 @using NUnitOnWasm.TestRunner
 
 <h3>Playground</h3>
@@ -22,29 +22,6 @@
     
     private StandaloneCodeEditor _editor { get; set; }
 
-    private string _testCode = @"using System;
-using NUnit.Framework;
-using System.Threading;
-
-namespace PlaygroundExecution 
-{
-    [TestFixture]
-    public class UnitTests
-    {
-        [Test]
-        public void PassingTest()
-        {
-            Assert.That(1 == 1);
-        }
-
-        [TestCase(40,40)]
-        public void Parameterized_Test(int a, int b)
-        {
-            Assert.That(a == b);
-        }
-    }
-}";
-
     List<MetadataReference> References = new();
     
     private StandaloneEditorConstructionOptions EditorConstructionOptions(StandaloneCodeEditor editor)
@@ -53,7 +30,9 @@ namespace PlaygroundExecution
         {
             AutomaticLayout = true,
             Language = "csharp",
-            Value = _testCode,
+            Value = PlaygroundConstants.UnitTestClassExample,
+            Minimap = new EditorMinimapOptions(){ Enabled = false, },
+            
         };
     }
 
@@ -61,100 +40,83 @@ namespace PlaygroundExecution
     {
         var code = await _editor.GetValue();
         var assembly = await CompileToAssembly(code);
+
+        if (assembly is null)
+            return;
+        
         var result = RunTests(assembly);
 
-        var msg = result switch {
-            0 => "All tests passed, nice!",
-            1 => "One or more tests failed",
-            _ => $"An unexpected error occurred, resultCode={result}",
-            };
+        if (result is null || result.TotalCount == 0)
+        {
+            await Alert("An unexpected error occurred");
+            return;
+        }
 
-        await Alert(msg);
+        if (result.FailCount > 0)
+        {
+            await Alert("One or more tests failed");
+        }
+        else
+        {
+            await Alert("All tests passed, nice!");
+        }
     }
 
-    public async Task<Assembly> CompileToAssembly(string sourceCode)
+    private async Task<Assembly?> CompileToAssembly(string sourceCode)
     {
         await AddNetCoreDefaultReferences();
         
         var compilationOptions = new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, concurrentBuild: false, optimizationLevel: OptimizationLevel.Release)
-            .WithUsings("System", "System.Text", "System.Collections.Generic", "System.IO", "System.Linq", "System.Threading", "System.Threading.Tasks");
-        
+            .WithUsings(PlaygroundConstants.DefaultNamespaces);
+
         var tree = SyntaxFactory.ParseSyntaxTree(sourceCode.Trim());
-        var compilation = CSharpCompilation.Create("Program.cs")
+        
+        var isoDateTime = DateTime.Now.ToString("yyyyMMddTHHmmss");
+        var compilation = CSharpCompilation.Create($"PlaygroundBuild-{isoDateTime}.dll")
             .WithOptions(compilationOptions)
             .WithReferences(References)
             .AddSyntaxTrees(tree);
-
-        Stream codeStream;
-        await using (codeStream = new MemoryStream())
+        
+        await using var codeStream = new MemoryStream();
+        
+        var compilationResult = compilation.Emit(codeStream);
+        
+        if (!compilationResult.Success)
         {
-            // Actually compile the code
-            var compilationResult = compilation.Emit(codeStream);
-
-            // Compilation Error handling
-            if (!compilationResult.Success)
-            {
-                await OnCompilationError(compilationResult);
-            }
-    
-            // Load
-            return Assembly.Load(((MemoryStream)codeStream).ToArray());
+            await OnCompilationError(compilationResult);
+            return null;
         }
+        
+        return Assembly.Load(codeStream.ToArray());
     }
 
-    public async Task OnCompilationError(EmitResult compilationResult)
+    private async Task OnCompilationError(EmitResult compilationResult)
     {
-        var sb = new StringBuilder("Build failed\n");
-        foreach (var diag in compilationResult.Diagnostics)
-        {
-            sb.AppendLine(diag.ToString());
-        }
-        var errorMessage = sb.ToString();
+        var diagnostics = compilationResult.Diagnostics
+            .Select(x => x.ToString())
+            .ToList()
+            .Prepend("Build failed.");
 
-        if (errorMessage.Length > 0)
-        {
-            await Alert(errorMessage);
-            throw new ApplicationException(errorMessage);
-        }
+        var errorMessage = string.Join("\n", diagnostics);
+
+        await Alert(errorMessage);
     }
 
     private async Task Alert(string message) => await JsRuntime.InvokeVoidAsync("alert", message);
-    
-    public int RunTests(Assembly assembly)
+
+    private ITestResult? RunTests(Assembly assembly)
     {
         var runner = new AssemblyTestListener(assembly);
         runner.Run();
 
-        if (runner.Result is null || runner.Result.TotalCount == 0)
-            return -1;
-
-        return runner.Result.FailCount == 0 ? 0 : 1;
+        return runner.Result;
     }
 
-    public async Task AddNetCoreDefaultReferences()
+    private async Task AddNetCoreDefaultReferences()
     {
-        string[] defaultLibs =
+        foreach (var lib in PlaygroundConstants.DefaultLibraries)
         {
-            "/_framework/System.dll",
-            "/_framework/System.Buffers.dll",
-            "/_framework/System.Collections.dll",
-            "/_framework/System.Core.dll",
-            "/_framework/System.Runtime.dll",
-            "/_framework/System.IO.dll",
-            "/_framework/System.Linq.dll",
-            "/_framework/System.Linq.Expressions.dll",
-            "/_framework/System.Linq.Parallel.dll",
-            "/_framework/mscorlib.dll",
-            "/_framework/netstandard.dll",
-            "/_framework/System.Private.CoreLib.dll",
-            "/_framework/NUnit.Framework.dll",
-        };
-        
-        List<string> libraries = new (defaultLibs);
-
-        foreach (var libPath in libraries)
-        {
-            await using var referenceStream = await HttpClient.GetStreamAsync(libPath);
+            await using var referenceStream = await HttpClient.GetStreamAsync($"/_framework/{lib}");
             References.Add(MetadataReference.CreateFromStream(referenceStream));
         }
     }
