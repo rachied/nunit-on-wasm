@@ -5,7 +5,9 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Emit;
 using Microsoft.JSInterop;
+using NUnit.Common;
 using NUnit.Framework.Interfaces;
+using NUnitLite;
 using NUnitOnWasm.TestRunner;
 
 namespace NUnitOnWasm.Pages;
@@ -44,13 +46,13 @@ public partial class Playground
         
         var result = RunTests(assembly);
 
-        if (result is null || result.TotalCount == 0)
+        if (result.TestCount == 0)
         {
             await Alert("An unexpected error occurred");
             return;
         }
 
-        if (result.FailCount > 0)
+        if (result.FailedCount > 0)
         {
             await Alert("One or more tests failed");
         }
@@ -102,12 +104,15 @@ public partial class Playground
 
     private async Task Alert(string message) => await JsRuntime.InvokeVoidAsync("alert", message);
 
-    private ITestResult? RunTests(Assembly assembly)
+    private ResultSummary RunTests(Assembly assembly)
     {
-        var runner = new AssemblyTestListener(assembly);
-        runner.Run();
+        var args = new[] { "--noresult", "--labels=ON" };	
+        var writer = new ExtendedTextWrapper(Console.Out);
+        var runner = new WasmRunner(assembly);
+        
+        runner.Execute(writer, TextReader.Null, args);
 
-        return runner.Result;
+        return runner.Summary;
     }
 
     private async Task AddNetCoreDefaultReferences()
