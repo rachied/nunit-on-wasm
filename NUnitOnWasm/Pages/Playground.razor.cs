@@ -9,11 +9,16 @@ using NUnit.Common;
 using NUnit.Framework.Interfaces;
 using NUnitLite;
 using NUnitOnWasm.TestRunner;
+using NUnitOnWasm.Worker;
+using SpawnDev.BlazorJS.WebWorkers;
 
 namespace NUnitOnWasm.Pages;
 
 public partial class Playground
 {
+    [Inject]
+    public WebWorkerService WebWorkerService { get; set; }
+    
     [Inject] 
     public IJSRuntime JsRuntime { get; set; }
 
@@ -23,6 +28,8 @@ public partial class Playground
     private StandaloneCodeEditor? Editor { get; set; }
 
     private readonly List<MetadataReference> _references = new();
+    
+    private WebWorker? _webWorker;
     
     private StandaloneEditorConstructionOptions EditorConstructionOptions(StandaloneCodeEditor editor)
     {
@@ -39,26 +46,40 @@ public partial class Playground
     public async Task CompileAndRun()
     {
         var code = await Editor.GetValue();
-        var assembly = await CompileToAssembly(code);
-
-        if (assembly is null)
-            return;
         
-        var result = RunTests(assembly);
+        _webWorker ??= await WebWorkerService.GetWebWorker();
+        
+        var runner = _webWorker.GetService<ITestWorker>();
 
-        if (result.TestCount == 0)
+        try
         {
-            await Alert("An unexpected error occurred");
-            return;
-        }
+            var result = await runner
+                .RunTests(code)
+                .WaitAsync(TimeSpan.FromSeconds(5));
 
-        if (result.FailedCount > 0)
-        {
-            await Alert("One or more tests failed");
+            if (result.TestCount == 0)
+            {
+                await Alert("An unexpected error occurred");
+                return;
+            }
+
+            if (result.FailedCount > 0)
+            {
+                await Alert("One or more tests failed");
+            }
+            else
+            {
+                await Alert("All tests passed, nice!");
+            }
         }
-        else
+        catch (TimeoutException e)
         {
-            await Alert("All tests passed, nice!");
+            await Alert("Test suite timed out");
+        }
+        finally
+        {
+            _webWorker?.Dispose();
+            _webWorker = null;
         }
     }
 
@@ -103,17 +124,6 @@ public partial class Playground
     }
 
     private async Task Alert(string message) => await JsRuntime.InvokeVoidAsync("alert", message);
-
-    private ResultSummary RunTests(Assembly assembly)
-    {
-        var args = new[] { "--noresult", "--labels=ON" };	
-        var writer = new ExtendedTextWrapper(Console.Out);
-        var runner = new WasmRunner(assembly);
-        
-        runner.Execute(writer, TextReader.Null, args);
-
-        return runner.Summary;
-    }
 
     private async Task AddNetCoreDefaultReferences()
     {
