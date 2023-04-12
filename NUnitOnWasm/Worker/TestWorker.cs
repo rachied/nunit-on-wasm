@@ -35,7 +35,7 @@ public class TestWorker : ITestWorker
         
         sw.Stop();
         
-        Console.WriteLine($"Compilation and tests took {sw.ElapsedMilliseconds} ms");
+        Console.WriteLine($"roundtrip took {sw.ElapsedMilliseconds} ms");
 
         return new TestResultSummary()
         {
@@ -46,6 +46,8 @@ public class TestWorker : ITestWorker
     
     private async Task<Assembly?> CompileToAssembly(string sourceCode)
     {
+        var refs = await GetDefaultReferences();
+        
         var sw = new Stopwatch();
         sw.Start();
         var compilationOptions = new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, concurrentBuild: false, optimizationLevel: OptimizationLevel.Release)
@@ -56,7 +58,7 @@ public class TestWorker : ITestWorker
         var isoDateTime = DateTime.Now.ToString("yyyyMMddTHHmmss");
         var compilation = CSharpCompilation.Create($"PlaygroundBuild-{isoDateTime}.dll")
             .WithOptions(compilationOptions)
-            .WithReferences(await GetDefaultReferences())
+            .WithReferences(refs)
             .AddSyntaxTrees(tree);
         
         await using var codeStream = new MemoryStream();
@@ -77,6 +79,9 @@ public class TestWorker : ITestWorker
     
     private async Task<List<MetadataReference>> GetDefaultReferences()
     {
+        var sw = new Stopwatch();
+        sw.Start();
+        
         var references = new List<MetadataReference>();
         
         foreach (var lib in PlaygroundConstants.DefaultLibraries)
@@ -84,6 +89,10 @@ public class TestWorker : ITestWorker
             await using var referenceStream = await _httpClient.GetStreamAsync($"/_framework/{lib}");
             references.Add(MetadataReference.CreateFromStream(referenceStream));
         }
+        
+        sw.Stop();
+        
+        Console.WriteLine($"Downloading assemblies took {sw.ElapsedMilliseconds} ms");
 
         return references;
     }

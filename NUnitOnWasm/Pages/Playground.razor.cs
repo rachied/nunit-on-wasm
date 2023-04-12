@@ -45,9 +45,12 @@ public partial class Playground
 
     public async Task CompileAndRun()
     {
+        var timedOut = false;
         var code = await Editor.GetValue();
         
         _webWorker ??= await WebWorkerService.GetWebWorker();
+        
+        Console.WriteLine($"Max worker count is {WebWorkerService.MaxWorkerCount}");
         
         var runner = _webWorker.GetService<ITestWorker>();
 
@@ -55,31 +58,37 @@ public partial class Playground
         {
             var result = await runner
                 .RunTests(code)
-                .WaitAsync(TimeSpan.FromSeconds(5));
+                .WaitAsync(PlaygroundConstants.TestSuiteMaxDuration);
 
             if (result.TestCount == 0)
             {
-                await Alert("An unexpected error occurred");
+                await Print("No tests were found");
                 return;
             }
 
             if (result.FailedCount > 0)
             {
-                await Alert("One or more tests failed");
+                await Print($"{result.FailedCount} tests failed");
             }
             else
             {
-                await Alert("All tests passed, nice!");
+                await Print($"All {result.TestCount} tests passed, nice!");
             }
         }
         catch (TimeoutException e)
         {
-            await Alert("Test suite timed out");
+            timedOut = true;
         }
         finally
         {
             _webWorker?.Dispose();
             _webWorker = null;
+            
+
+            if (timedOut)
+            {
+                await Print($"Test suite exceeded timeout of {PlaygroundConstants.TestSuiteMaxDuration.TotalMilliseconds} ms");
+            }
         }
     }
 
@@ -124,6 +133,8 @@ public partial class Playground
     }
 
     private async Task Alert(string message) => await JsRuntime.InvokeVoidAsync("alert", message);
+    
+    private async Task Print(string message) => await JsRuntime.InvokeVoidAsync("console.log", message);
 
     private async Task AddNetCoreDefaultReferences()
     {

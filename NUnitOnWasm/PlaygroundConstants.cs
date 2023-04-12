@@ -2,6 +2,8 @@
 
 public class PlaygroundConstants
 {
+    public static TimeSpan TestSuiteMaxDuration = TimeSpan.FromSeconds(5);
+    
     public static string UnitTestClassExample = @"using System;
 using NUnit.Framework;
 

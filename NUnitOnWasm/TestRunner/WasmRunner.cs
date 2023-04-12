@@ -236,13 +236,8 @@ namespace NUnitOnWasm.TestRunner
                 _textUI.DisplayNotRunReport(result);	
 
             if (result.ResultState.Status == TestStatus.Failed || result.ResultState.Status == TestStatus.Warning)	
-                _textUI.DisplayErrorsFailuresAndWarningsReport(result);	
-
-#if FULL	
-            if (_options.Full)	
-                _textUI.PrintFullReport(_result);	
-#endif	
-
+                _textUI.DisplayErrorsFailuresAndWarningsReport(result);
+            
             _textUI.DisplayRunSettings();	
 
             _textUI.DisplaySummaryReport(Summary);	
