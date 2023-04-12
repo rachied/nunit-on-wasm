@@ -40,7 +40,7 @@ public partial class Playground
         {
             AutomaticLayout = true,
             Language = "csharp",
-            Value = PlaygroundConstants.UnitTestClassExample,
+            Value = PlaygroundConstants.SourceCodeExample,
             Minimap = new EditorMinimapOptions(){ Enabled = false, },
             
         };

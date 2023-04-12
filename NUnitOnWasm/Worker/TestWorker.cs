@@ -1,12 +1,15 @@
 ﻿using System.Diagnostics;
 using System.Reflection;
+using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Common;
 using NUnitOnWasm.TestRunner;
+using Stryker.Core.Primitives.InjectedHelpers;
 using Stryker.Core.Primitives.Logging;
 using Stryker.Core.Primitives.Mutants;
+using Stryker.Core.Primitives.Options;
 
 namespace NUnitOnWasm.Worker;
 
@@ -46,12 +49,6 @@ public class TestWorker : ITestWorker
 
     public async Task RunMutationTests(string sourceCode)
     {
-        var assembly = await CompileToAssembly(sourceCode);
-
-        if (assembly is null)
-            return;
-
-        
         var mutatedAssembly = await GetCompilingMutantAssemblies(sourceCode);
     }
 
@@ -70,7 +67,7 @@ public class TestWorker : ITestWorker
 
             var mutatedTree = orchestrator.Mutate(root);
         
-            Console.WriteLine("Mutated the syntax tree:");
+            Console.WriteLine($"Mutated the syntax tree with {orchestrator.MutantCount} mutations:");
         
             Console.WriteLine(mutatedTree.ToFullString());
 
@@ -78,7 +75,6 @@ public class TestWorker : ITestWorker
             var assembly = await CompileToAssembly(mutatedTree.ToFullString());
 
             return assembly ?? throw new Exception("Failed to compile the mutated syntax tree");
-            // mutator.Mutate()
         }
         catch (Exception e)
         {
@@ -96,14 +92,22 @@ public class TestWorker : ITestWorker
         var compilationOptions = new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, concurrentBuild: false, optimizationLevel: OptimizationLevel.Release)
             .WithUsings(PlaygroundConstants.DefaultNamespaces);
 
-        var tree = SyntaxFactory.ParseSyntaxTree(sourceCode.Trim());
-        
+        var sourceCodeTree = SyntaxFactory.ParseSyntaxTree(sourceCode.Trim());
+        var injectionTrees = InjectionSyntaxTrees();
+
+        foreach (var t in injectionTrees)
+        {
+            Console.WriteLine("Injecting helper class:");
+            Console.WriteLine((await t.GetRootAsync()).ToFullString());
+        }
+
         var isoDateTime = DateTime.Now.ToString("yyyyMMddTHHmmss");
         var compilation = CSharpCompilation.Create($"PlaygroundBuild-{isoDateTime}.dll")
             .WithOptions(compilationOptions)
             .WithReferences(refs)
-            .AddSyntaxTrees(tree);
-        
+            .AddSyntaxTrees(sourceCodeTree)
+            .AddSyntaxTrees(injectionTrees);
+
         await using var codeStream = new MemoryStream();
         
         var compilationResult = compilation.Emit(codeStream);
@@ -118,6 +122,19 @@ public class TestWorker : ITestWorker
         Console.WriteLine($"Compilation took {sw.ElapsedMilliseconds} ms");
         
         return Assembly.Load(codeStream.ToArray());
+    }
+
+    private static List<SyntaxTree> InjectionSyntaxTrees()
+    {
+        var trees = new List<SyntaxTree>();
+        
+        foreach (var (name, code) in CodeInjection.MutantHelpers)
+        {
+            var tree = CSharpSyntaxTree.ParseText(code, path: name, encoding: Encoding.UTF32);
+            trees.Add(tree);
+        }
+
+        return trees;
     }
     
     private async Task<List<MetadataReference>> GetDefaultReferences()

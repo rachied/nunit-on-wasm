@@ -7,10 +7,10 @@ public class PlaygroundConstants
     public static string UnitTestClassExample = @"using System;
 using NUnit.Framework;
 
-namespace PlaygroundExecution 
+namespace Playground.Example.Tests 
 {
     [TestFixture]
-    public class UnitTests
+    public class MyTestClass
     {
         [Test]
         public void PassingTest()
@@ -22,6 +22,24 @@ namespace PlaygroundExecution
         public void Parameterized_Test(int a, int b)
         {
             Assert.That(a == b);
+        }
+    }
+}";
+    
+    public static string SourceCodeExample = @"using System;
+
+namespace Playground.Example.Source 
+{
+    public class RoboBar
+    {
+        public string GetGreeting(int age)
+        {
+            if(age > 18)
+            {
+                return ""Here have a beer!"";
+            }
+
+            return ""Sorry not today!"";
         }
     }
 }";
