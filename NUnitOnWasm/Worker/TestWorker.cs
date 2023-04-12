@@ -2,14 +2,19 @@
 using System.Reflection;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Common;
 using NUnitOnWasm.TestRunner;
+using Stryker.Core.Primitives.Logging;
+using Stryker.Core.Primitives.Mutants;
 
 namespace NUnitOnWasm.Worker;
 
 public interface ITestWorker
 {
     public Task<TestResultSummary> RunTests(string sourceCode);
+
+    public Task RunMutationTests(string sourceCode);
 }
 
 public class TestWorker : ITestWorker
@@ -19,12 +24,11 @@ public class TestWorker : ITestWorker
     public TestWorker(HttpClient httpClient)
     {
         _httpClient = httpClient;
+        ApplicationLogging.LoggerFactory ??= NullLoggerFactory.Instance;
     }
     
     public async Task<TestResultSummary> RunTests(string sourceCode)
     {
-        var sw = new Stopwatch();
-        sw.Start();
         var assembly = await CompileToAssembly(sourceCode);
         
         var args = new[] { "--noresult", "--labels=ON" };	
@@ -33,17 +37,56 @@ public class TestWorker : ITestWorker
         
         runner.Execute(writer, TextReader.Null, args);
         
-        sw.Stop();
-        
-        Console.WriteLine($"roundtrip took {sw.ElapsedMilliseconds} ms");
-
         return new TestResultSummary()
         {
             FailedCount = runner.Summary.FailedCount,
             TestCount = runner.Summary.TestCount,
         };
     }
-    
+
+    public async Task RunMutationTests(string sourceCode)
+    {
+        var assembly = await CompileToAssembly(sourceCode);
+
+        if (assembly is null)
+            return;
+
+        
+        var mutatedAssembly = await GetCompilingMutantAssemblies(sourceCode);
+    }
+
+    private async Task<Assembly> GetCompilingMutantAssemblies(string sourceCode)
+    {
+        try
+        {
+            var orchestrator = new CsharpMutantOrchestrator();
+
+            var tree = SyntaxFactory.ParseSyntaxTree(sourceCode.Trim());
+            var root = await tree.GetRootAsync();
+
+        
+            Console.WriteLine("Original syntax tree:");
+            Console.WriteLine(root.ToFullString());
+
+            var mutatedTree = orchestrator.Mutate(root);
+        
+            Console.WriteLine("Mutated the syntax tree:");
+        
+            Console.WriteLine(mutatedTree.ToFullString());
+
+
+            var assembly = await CompileToAssembly(mutatedTree.ToFullString());
+
+            return assembly ?? throw new Exception("Failed to compile the mutated syntax tree");
+            // mutator.Mutate()
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+            throw;
+        }
+    }
+
     private async Task<Assembly?> CompileToAssembly(string sourceCode)
     {
         var refs = await GetDefaultReferences();

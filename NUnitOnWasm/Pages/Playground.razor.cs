@@ -11,6 +11,7 @@ using NUnitLite;
 using NUnitOnWasm.TestRunner;
 using NUnitOnWasm.Worker;
 using SpawnDev.BlazorJS.WebWorkers;
+using Stryker.Core.Primitives.Logging;
 
 namespace NUnitOnWasm.Pages;
 
@@ -24,6 +25,8 @@ public partial class Playground
 
     [Inject]
     public HttpClient HttpClient { get; set; }
+    
+    [Inject] public ILoggerFactory LoggerFactory { get; set; }
     
     private StandaloneCodeEditor? Editor { get; set; }
 
@@ -41,6 +44,17 @@ public partial class Playground
             Minimap = new EditorMinimapOptions(){ Enabled = false, },
             
         };
+    }
+
+    public async Task Mutate()
+    {
+        _webWorker ??= await WebWorkerService.GetWebWorker();
+        ApplicationLogging.LoggerFactory = LoggerFactory;
+
+        var runner = new TestWorker(HttpClient);
+
+         await runner
+            .RunMutationTests(await Editor.GetValue());
     }
 
     public async Task CompileAndRun()
@@ -62,17 +76,17 @@ public partial class Playground
 
             if (result.TestCount == 0)
             {
-                await Print("No tests were found");
+                await Alert("No tests were found");
                 return;
             }
 
             if (result.FailedCount > 0)
             {
-                await Print($"{result.FailedCount} tests failed");
+                await Alert($"{result.FailedCount} tests failed");
             }
             else
             {
-                await Print($"All {result.TestCount} tests passed, nice!");
+                await Alert($"All {result.TestCount} tests passed, nice!");
             }
         }
         catch (TimeoutException e)
@@ -87,7 +101,7 @@ public partial class Playground
 
             if (timedOut)
             {
-                await Print($"Test suite exceeded timeout of {PlaygroundConstants.TestSuiteMaxDuration.TotalMilliseconds} ms");
+                await Alert($"Test suite exceeded timeout of {PlaygroundConstants.TestSuiteMaxDuration.TotalMilliseconds} ms");
             }
         }
     }

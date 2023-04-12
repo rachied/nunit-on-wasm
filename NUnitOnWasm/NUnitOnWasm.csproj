@@ -32,4 +32,8 @@
         </Reference>
     </ItemGroup>
 
+    <ItemGroup>
+      <ProjectReference Include="..\Stryker.Core.Primitives\Stryker.Core.Primitives.csproj" />
+    </ItemGroup>
+
 </Project>
