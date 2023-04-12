@@ -1,19 +1,31 @@
-﻿using NUnit;
+﻿using System.Reflection;
+using NUnit;
 using NUnit.Framework.Api;
 using NUnit.Framework.Interfaces;
 using NUnit.Framework.Internal;
 
-namespace NUnitOnWasm;
+namespace NUnitOnWasm.TestRunner;
 
-public class MyTestRunner : TestFilter, ITestListener
+public class AssemblyTestListener : TestFilter, ITestListener
 {
+    private readonly Assembly _asm;
+
+    public ITestResult? Result { get; set; }
+
+    public AssemblyTestListener(Assembly asm)
+    {
+        _asm = asm;
+    }
+    
     public void Run()
     {
         Console.WriteLine("Starting tests");
         Console.WriteLine();
+        
         var builder = new DefaultTestAssemblyBuilder();
         var runner = new NUnitTestAssemblyRunner(builder);
-        runner.Load(typeof(MyTestRunner).Assembly, new Dictionary<string, object>()
+        
+        runner.Load(_asm, new Dictionary<string, object>()
         {
             //https://github.com/nunit/nunit/issues/2922
             [FrameworkPackageSettings.NumberOfTestWorkers] = 0,
@@ -30,6 +42,7 @@ public class MyTestRunner : TestFilter, ITestListener
     {
         var symbol = result.FailCount > 0 ? "✖" : (result.PassCount > 0 ? "✔" : "❓");
         Console.WriteLine($"\t{symbol}{result.PassCount} passed, {result.FailCount} failed, {result.SkipCount} skipped");
+        Result = result;
     }
     public void TestOutput(TestOutput output) => Console.WriteLine("\t🖶" + output.Text);
 

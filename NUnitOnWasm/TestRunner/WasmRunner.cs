@@ -1,420 +1,421 @@
-﻿using System.Diagnostics;
-using System.Reflection;
-using NUnit.Common;
-using NUnit;
-using NUnit.Framework.Api;
-using NUnit.Framework.Interfaces;
-using NUnit.Framework.Internal;
-using NUnit.Framework.Internal.Filters;
-using NUnitLite;
+using System.Diagnostics;	
+using System.Reflection;	
+using NUnit.Common;	
+using NUnit;	
+using NUnit.Framework.Api;	
+using NUnit.Framework.Interfaces;	
+using NUnit.Framework.Internal;	
+using NUnit.Framework.Internal.Filters;	
+using NUnitLite;	
 
-namespace NUnitOnWasm.TestRunner
-{
-    /// <summary>
-    /// TextRunner is a general purpose class that runs tests and
-    /// outputs to a text-based user interface (TextUI).
-    ///
-    /// Call it from your Main like this:
-    ///   new TextRunner(textWriter).Execute(args);
-    ///     OR
-    ///   new TextUI().Execute(args);
-    /// The provided TextWriter is used by default, unless the
-    /// arguments to Execute override it using -out. The second
-    /// form uses the Console, provided it exists on the platform.
-    ///
-    /// NOTE: When running on a platform without a Console, such
-    /// as Windows Phone, the results will simply not appear if
-    /// you fail to specify a file in the call itself or as an option.
-    /// </summary>
-    public class WasmRunner : ITestListener
-    {
-        #region Runner Return Codes
+namespace NUnitOnWasm.TestRunner	
+{	
+    /// <summary>	
+    /// TextRunner is a general purpose class that runs tests and	
+    /// outputs to a text-based user interface (TextUI).	
+    ///	
+    /// Call it from your Main like this:	
+    ///   new TextRunner(textWriter).Execute(args);	
+    ///     OR	
+    ///   new TextUI().Execute(args);	
+    /// The provided TextWriter is used by default, unless the	
+    /// arguments to Execute override it using -out. The second	
+    /// form uses the Console, provided it exists on the platform.	
+    ///	
+    /// NOTE: When running on a platform without a Console, such	
+    /// as Windows Phone, the results will simply not appear if	
+    /// you fail to specify a file in the call itself or as an option.	
+    /// </summary>	
+    public class WasmRunner : ITestListener	
+    {	
+        #region Runner Return Codes	
 
-        /// <summary>OK</summary>
-        public const int OK = 0;
-        /// <summary>Invalid Arguments</summary>
-        public const int INVALID_ARG = -1;
-        /// <summary>File not found</summary>
-        public const int FILE_NOT_FOUND = -2;
-        /// <summary>Test fixture not found - No longer in use</summary>
-        //public const int FIXTURE_NOT_FOUND = -3;
-        /// <summary>Invalid test suite</summary>
-        public const int INVALID_TEST_FIXTURE = -4;
-        /// <summary>Unexpected error occurred</summary>
-        public const int UNEXPECTED_ERROR = -100;
+        /// <summary>OK</summary>	
+        public const int OK = 0;	
+        /// <summary>Invalid Arguments</summary>	
+        public const int INVALID_ARG = -1;	
+        /// <summary>File not found</summary>	
+        public const int FILE_NOT_FOUND = -2;	
+        /// <summary>Test fixture not found - No longer in use</summary>	
+        //public const int FIXTURE_NOT_FOUND = -3;	
+        /// <summary>Invalid test suite</summary>	
+        public const int INVALID_TEST_FIXTURE = -4;	
+        /// <summary>Unexpected error occurred</summary>	
+        public const int UNEXPECTED_ERROR = -100;	
 
-        #endregion
+        #endregion	
 
-        private Assembly _testAssembly;
-        private ITestAssemblyRunner _runner;
+        private Assembly _testAssembly;	
+        private ITestAssemblyRunner _runner;	
 
-        private NUnitLiteOptions _options;
-        private ITestListener _teamCity = null;
+        private NUnitLiteOptions _options;	
+        private ITestListener _teamCity = null;	
 
-        private TextUI _textUI;
+        private TextUI _textUI;	
 
-        #region Constructors
-        
-        public WasmRunner(Assembly testAssembly)
-        {
-            _testAssembly = testAssembly;
-        }
+        #region Constructors	
 
-        #endregion
+        public WasmRunner(Assembly testAssembly)	
+        {	
+            _testAssembly = testAssembly;	
+        }	
 
-        #region Properties
+        #endregion	
 
-        public ResultSummary Summary { get; private set; }
+        #region Properties	
 
-        #endregion
+        public ResultSummary Summary { get; private set; }	
 
-        #region Public Methods
+        #endregion	
 
-        public int Execute(string[] args)
-        {
-            _options = new NUnitLiteOptions(_testAssembly == null, args);
+        #region Public Methods	
 
-            ExtendedTextWriter outWriter = null;
-            if (_options.OutFile != null)
-            {
-                var outFile = Path.Combine(_options.WorkDirectory, _options.OutFile);
-                var textWriter = TextWriter.Synchronized(new StreamWriter(outFile));
-                outWriter = new ExtendedTextWrapper(textWriter);
-                Console.SetOut(outWriter);
-            }
-            else
-            {
-                outWriter = new ColorConsoleWriter(!_options.NoColor);
-            }
+        public int Execute(string[] args)	
+        {	
+            _options = new NUnitLiteOptions(_testAssembly == null, args);	
 
-            using (outWriter)
-            {
-                TextWriter errWriter = null;
-                if (_options.ErrFile != null)
-                {
-                    var errFile = Path.Combine(_options.WorkDirectory, _options.ErrFile);
-                    errWriter = TextWriter.Synchronized(new StreamWriter(errFile));
-                    Console.SetError(errWriter);
-                }
+            ExtendedTextWriter outWriter = null;	
+            if (_options.OutFile != null)	
+            {	
+                var outFile = Path.Combine(_options.WorkDirectory, _options.OutFile);	
+                var textWriter = TextWriter.Synchronized(new StreamWriter(outFile));	
+                outWriter = new ExtendedTextWrapper(textWriter);	
+                Console.SetOut(outWriter);	
+            }	
+            else	
+            {	
+                outWriter = new ColorConsoleWriter(!_options.NoColor);	
+            }	
 
-                using (errWriter)
-                {
-                    _textUI = new TextUI(outWriter, Console.In, _options);
-                    return Execute();
-                }
-            }
-        }
+            using (outWriter)	
+            {	
+                TextWriter errWriter = null;	
+                if (_options.ErrFile != null)	
+                {	
+                    var errFile = Path.Combine(_options.WorkDirectory, _options.ErrFile);	
+                    errWriter = TextWriter.Synchronized(new StreamWriter(errFile));	
+                    Console.SetError(errWriter);	
+                }	
 
-        // Entry point called by AutoRun and by the .NET Standard nunitlite.runner
-        public int Execute(ExtendedTextWriter writer, TextReader reader, string[] args)
-        {
-            _options = new NUnitLiteOptions(_testAssembly == null, args);
+                using (errWriter)	
+                {	
+                    _textUI = new TextUI(outWriter, Console.In, _options);	
+                    return Execute();	
+                }	
+            }	
+        }	
 
-            _textUI = new TextUI(writer, reader, _options);
+        // Entry point called by AutoRun and by the .NET Standard nunitlite.runner	
+        public int Execute(ExtendedTextWriter writer, TextReader reader, string[] args)	
+        {	
+            _options = new NUnitLiteOptions(_testAssembly == null, args);	
 
-            return Execute();
-        }
+            _textUI = new TextUI(writer, reader, _options);	
 
-        // Internal Execute depends on _textUI and _options having been set already.
-        public int Execute()
-        {
-            _runner = new NUnitTestAssemblyRunner(new DefaultTestAssemblyBuilder());
+            return Execute();	
+        }	
 
-            InitializeInternalTrace();
+        // Internal Execute depends on _textUI and _options having been set already.	
+        public int Execute()	
+        {	
+            _runner = new NUnitTestAssemblyRunner(new DefaultTestAssemblyBuilder());	
 
-            try
-            {
-                if (!Directory.Exists(_options.WorkDirectory))
-                    Directory.CreateDirectory(_options.WorkDirectory);
+            InitializeInternalTrace();	
 
-                if (_options.TeamCity)
-                    _teamCity = new TeamCityEventListener(_textUI.Writer);
+            try	
+            {	
+                if (!Directory.Exists(_options.WorkDirectory))	
+                    Directory.CreateDirectory(_options.WorkDirectory);	
 
-                if (_options.ShowVersion || !_options.NoHeader)
-                    _textUI.DisplayHeader();
+                if (_options.TeamCity)	
+                    _teamCity = new TeamCityEventListener(_textUI.Writer);	
 
-                if (_options.ShowHelp)
-                {
-                    _textUI.DisplayHelp();
-                    return TextRunner.OK;
-                }
+                if (_options.ShowVersion || !_options.NoHeader)	
+                    _textUI.DisplayHeader();	
 
-                // We already showed version as a part of the header
-                if (_options.ShowVersion)
-                    return TextRunner.OK;
+                if (_options.ShowHelp)	
+                {	
+                    _textUI.DisplayHelp();	
+                    return TextRunner.OK;	
+                }	
 
-                if (_options.ErrorMessages.Count > 0)
-                {
-                    _textUI.DisplayErrors(_options.ErrorMessages);
-                    _textUI.Writer.WriteLine();
-                    _textUI.DisplayHelp();
+                // We already showed version as a part of the header	
+                if (_options.ShowVersion)	
+                    return TextRunner.OK;	
 
-                    return TextRunner.INVALID_ARG;
-                }
+                if (_options.ErrorMessages.Count > 0)	
+                {	
+                    _textUI.DisplayErrors(_options.ErrorMessages);	
+                    _textUI.Writer.WriteLine();	
+                    _textUI.DisplayHelp();	
 
-                if (_testAssembly == null && _options.InputFile == null)
-                {
-                    _textUI.DisplayError("No test assembly was specified.");
-                    _textUI.Writer.WriteLine();
-                    _textUI.DisplayHelp();
+                    return TextRunner.INVALID_ARG;	
+                }	
 
-                    return TextRunner.OK;
-                }
+                if (_testAssembly == null && _options.InputFile == null)	
+                {	
+                    _textUI.DisplayError("No test assembly was specified.");	
+                    _textUI.Writer.WriteLine();	
+                    _textUI.DisplayHelp();	
 
-                _textUI.DisplayRuntimeEnvironment();
+                    return TextRunner.OK;	
+                }	
 
-                if (_options.WaitBeforeExit && _options.OutFile != null)
-                    _textUI.DisplayWarning("Ignoring /wait option - only valid for Console");
+                _textUI.DisplayRuntimeEnvironment();	
 
-                var runSettings = MakeRunSettings(_options);
-                LoadTests(runSettings);
+                if (_options.WaitBeforeExit && _options.OutFile != null)	
+                    _textUI.DisplayWarning("Ignoring /wait option - only valid for Console");	
 
-                // We display the filters at this point so that any exception message
-                // thrown by CreateTestFilter will be understandable.
-                _textUI.DisplayTestFilters();
+                var runSettings = MakeRunSettings(_options);	
+                LoadTests(runSettings);	
 
-                TestFilter filter = CreateTestFilter(_options);
+                // We display the filters at this point so that any exception message	
+                // thrown by CreateTestFilter will be understandable.	
+                _textUI.DisplayTestFilters();	
 
-                return _options.Explore ? ExploreTests(filter) : RunTests(filter, runSettings);
-            }
-            catch (FileNotFoundException ex)
-            {
-                _textUI.DisplayError(ex.Message);
-                return FILE_NOT_FOUND;
-            }
-            catch (Exception ex)
-            {
-                _textUI.DisplayError(ex.ToString());
-                return UNEXPECTED_ERROR;
-            }
-            finally
-            {
-                if (_options.WaitBeforeExit)
-                    _textUI.WaitForUser("Press Enter key to continue . . .");
-            }
-        }
+                TestFilter filter = CreateTestFilter(_options);	
 
-        #endregion
+                return _options.Explore ? ExploreTests(filter) : RunTests(filter, runSettings);	
+            }	
+            catch (FileNotFoundException ex)	
+            {	
+                _textUI.DisplayError(ex.Message);	
+                return FILE_NOT_FOUND;	
+            }	
+            catch (Exception ex)	
+            {	
+                _textUI.DisplayError(ex.ToString());	
+                return UNEXPECTED_ERROR;	
+            }	
+            finally	
+            {	
+                if (_options.WaitBeforeExit)	
+                    _textUI.WaitForUser("Press Enter key to continue . . .");	
+            }	
+        }	
 
-        #region Helper Methods
+        #endregion	
 
-        private void LoadTests(IDictionary<string, object> runSettings)
-        {
-            TimeStamp startTime = new TimeStamp();
-            _runner.Load(_testAssembly, runSettings);
-            TimeStamp endTime = new TimeStamp();
+        #region Helper Methods	
 
-            _textUI.DisplayDiscoveryReport(startTime, endTime);
-        }
+        private void LoadTests(IDictionary<string, object> runSettings)	
+        {	
+            TimeStamp startTime = new TimeStamp();	
+            _runner.Load(_testAssembly, runSettings);	
+            TimeStamp endTime = new TimeStamp();	
 
-        public int RunTests(TestFilter filter, IDictionary<string, object> runSettings)
-        {
-            var startTime = DateTime.UtcNow;
+            _textUI.DisplayDiscoveryReport(startTime, endTime);	
+        }	
 
-            ITestResult result = _runner.Run(this, filter);
+        public int RunTests(TestFilter filter, IDictionary<string, object> runSettings)	
+        {	
+            var startTime = DateTime.UtcNow;	
 
-            ReportResults(result);
+            ITestResult result = _runner.Run(this, filter);	
 
-            if (_options.ResultOutputSpecifications.Count > 0)
-            {
-                var outputManager = new OutputManager(_options.WorkDirectory);
+            ReportResults(result);	
 
-                foreach (var spec in _options.ResultOutputSpecifications)
-                    outputManager.WriteResultFile(result, spec, runSettings, filter);
-            }
-            if (Summary.InvalidTestFixtures > 0)
-                return INVALID_TEST_FIXTURE;
+            if (_options.ResultOutputSpecifications.Count > 0)	
+            {	
+                var outputManager = new OutputManager(_options.WorkDirectory);	
 
-            return Summary.FailureCount + Summary.ErrorCount + Summary.InvalidCount;
-        }
+                foreach (var spec in _options.ResultOutputSpecifications)	
+                    outputManager.WriteResultFile(result, spec, runSettings, filter);	
+            }	
+            if (Summary.InvalidTestFixtures > 0)	
+                return INVALID_TEST_FIXTURE;	
 
-        public void ReportResults(ITestResult result)
-        {
-            Summary = new ResultSummary(result);
+            return Summary.FailureCount + Summary.ErrorCount + Summary.InvalidCount;	
+        }	
 
-            if (Summary.ExplicitCount + Summary.SkipCount + Summary.IgnoreCount > 0)
-                _textUI.DisplayNotRunReport(result);
+        public void ReportResults(ITestResult result)	
+        {	
+            Summary = new ResultSummary(result);	
 
-            if (result.ResultState.Status == TestStatus.Failed || result.ResultState.Status == TestStatus.Warning)
+            if (Summary.ExplicitCount + Summary.SkipCount + Summary.IgnoreCount > 0)	
+                _textUI.DisplayNotRunReport(result);	
+
+            if (result.ResultState.Status == TestStatus.Failed || result.ResultState.Status == TestStatus.Warning)	
                 _textUI.DisplayErrorsFailuresAndWarningsReport(result);
+            
+            _textUI.DisplayRunSettings();	
 
-#if FULL
-            if (_options.Full)
-                _textUI.PrintFullReport(_result);
-#endif
+            _textUI.DisplaySummaryReport(Summary);	
+        }	
 
-            _textUI.DisplayRunSettings();
+        private int ExploreTests(ITestFilter filter)	
+        {	
+            ITest testNode = _runner.ExploreTests(filter);	
 
-            _textUI.DisplaySummaryReport(Summary);
-        }
+            var specs = _options.ExploreOutputSpecifications;	
 
-        private int ExploreTests(ITestFilter filter)
-        {
-            ITest testNode = _runner.ExploreTests(filter);
+            if (specs.Count == 0)	
+                new TestCaseOutputWriter().WriteTestFile(testNode, Console.Out);	
+            else	
+            {	
+                var outputManager = new OutputManager(_options.WorkDirectory);	
 
-            var specs = _options.ExploreOutputSpecifications;
+                foreach (var spec in _options.ExploreOutputSpecifications)	
+                    outputManager.WriteTestFile(testNode, spec);	
+            }	
 
-            if (specs.Count == 0)
-                new TestCaseOutputWriter().WriteTestFile(testNode, Console.Out);
-            else
-            {
-                var outputManager = new OutputManager(_options.WorkDirectory);
+            return OK;	
+        }	
 
-                foreach (var spec in _options.ExploreOutputSpecifications)
-                    outputManager.WriteTestFile(testNode, spec);
-            }
+        /// <summary>	
+        /// Make the settings for this run - this is public for testing	
+        /// </summary>	
+        public static Dictionary<string, object> MakeRunSettings(NUnitLiteOptions options)	
+        {	
+            // Transfer command line options to run settings	
+            var runSettings = new Dictionary<string, object>();	
 
-            return OK;
-        }
+            if (options.PreFilters.Count > 0)	
+                runSettings[FrameworkPackageSettings.LOAD] = options.PreFilters;	
+            else if (options.TestList.Count > 0)	
+            {	
+                var prefilters = new List<string>();	
 
-        /// <summary>
-        /// Make the settings for this run - this is public for testing
-        /// </summary>
-        public static Dictionary<string, object> MakeRunSettings(NUnitLiteOptions options)
-        {
-            // Transfer command line options to run settings
-            var runSettings = new Dictionary<string, object>();
+                foreach (var testName in options.TestList)	
+                {	
+                    int end = testName.IndexOfAny(new char[] { '(', '<' });	
+                    if (end > 0)	
+                        prefilters.Add(testName.Substring(0, end).Trim());	
+                    else	
+                        prefilters.Add(testName);	
+                }	
 
-            if (options.PreFilters.Count > 0)
-                runSettings[FrameworkPackageSettings.LOAD] = options.PreFilters;
-            else if (options.TestList.Count > 0)
-            {
-                var prefilters = new List<string>();
+                runSettings[FrameworkPackageSettings.LOAD] = prefilters;	
+            }	
 
-                foreach (var testName in options.TestList)
-                {
-                    int end = testName.IndexOfAny(new char[] { '(', '<' });
-                    if (end > 0)
-                        prefilters.Add(testName.Substring(0, end).Trim());
-                    else
-                        prefilters.Add(testName);
-                }
+            if (options.NumberOfTestWorkers >= 0)	
+                runSettings[FrameworkPackageSettings.NumberOfTestWorkers] = options.NumberOfTestWorkers;	
 
-                runSettings[FrameworkPackageSettings.LOAD] = prefilters;
-            }
+            if (options.InternalTraceLevel != null)	
+                runSettings[FrameworkPackageSettings.InternalTraceLevel] = options.InternalTraceLevel;	
 
-            if (options.NumberOfTestWorkers >= 0)
-                runSettings[FrameworkPackageSettings.NumberOfTestWorkers] = options.NumberOfTestWorkers;
+            if (options.RandomSeed >= 0)	
+                runSettings[FrameworkPackageSettings.RandomSeed] = options.RandomSeed;	
 
-            if (options.InternalTraceLevel != null)
-                runSettings[FrameworkPackageSettings.InternalTraceLevel] = options.InternalTraceLevel;
+            if (options.WorkDirectory != null)	
+                runSettings[FrameworkPackageSettings.WorkDirectory] = Path.GetFullPath(options.WorkDirectory);	
 
-            if (options.RandomSeed >= 0)
-                runSettings[FrameworkPackageSettings.RandomSeed] = options.RandomSeed;
+            if (options.DefaultTimeout >= 0)	
+                runSettings[FrameworkPackageSettings.DefaultTimeout] = options.DefaultTimeout;	
 
-            if (options.WorkDirectory != null)
-                runSettings[FrameworkPackageSettings.WorkDirectory] = Path.GetFullPath(options.WorkDirectory);
+            if (options.StopOnError)	
+                runSettings[FrameworkPackageSettings.StopOnError] = true;	
 
-            if (options.DefaultTimeout >= 0)
-                runSettings[FrameworkPackageSettings.DefaultTimeout] = options.DefaultTimeout;
+            if (options.DefaultTestNamePattern != null)	
+                runSettings[FrameworkPackageSettings.DefaultTestNamePattern] = options.DefaultTestNamePattern;	
 
-            if (options.StopOnError)
-                runSettings[FrameworkPackageSettings.StopOnError] = true;
+            if (options.TestParameters.Count != 0)	
+                runSettings[FrameworkPackageSettings.TestParametersDictionary] = options.TestParameters;	
 
-            if (options.DefaultTestNamePattern != null)
-                runSettings[FrameworkPackageSettings.DefaultTestNamePattern] = options.DefaultTestNamePattern;
+            runSettings[FrameworkPackageSettings.NumberOfTestWorkers] = 0;	
+            runSettings[FrameworkPackageSettings.SynchronousEvents] = true;	
+            runSettings[FrameworkPackageSettings.RunOnMainThread] = true;
+            // runSettings[FrameworkPackageSettings.DefaultTimeout] = -1;
+            // runSettings[FrameworkPackageSettings.StopOnError] = true;
 
-            if (options.TestParameters.Count != 0)
-                runSettings[FrameworkPackageSettings.TestParametersDictionary] = options.TestParameters;
+            return runSettings;	
+        }	
 
-            return runSettings;
-        }
+        /// <summary>	
+        /// Create the test filter for this run - public for testing	
+        /// </summary>	
+        /// <param name="options"></param>	
+        /// <returns></returns>	
+        public static TestFilter CreateTestFilter(NUnitLiteOptions options)	
+        {	
+            var filter = TestFilter.Empty;	
 
-        /// <summary>
-        /// Create the test filter for this run - public for testing
-        /// </summary>
-        /// <param name="options"></param>
-        /// <returns></returns>
-        public static TestFilter CreateTestFilter(NUnitLiteOptions options)
-        {
-            var filter = TestFilter.Empty;
+            return filter;	
+        }	
 
-            return filter;
-        }
+        private void InitializeInternalTrace()	
+        {	
+            var traceLevel = (InternalTraceLevel)Enum.Parse(typeof(InternalTraceLevel), _options.InternalTraceLevel ?? "Off", true);	
 
-        private void InitializeInternalTrace()
-        {
-            var traceLevel = (InternalTraceLevel)Enum.Parse(typeof(InternalTraceLevel), _options.InternalTraceLevel ?? "Off", true);
+            if (traceLevel != InternalTraceLevel.Off)	
+            {	
+                var logName = GetLogFileName();	
 
-            if (traceLevel != InternalTraceLevel.Off)
-            {
-                var logName = GetLogFileName();
+                StreamWriter streamWriter = null;	
+                if (traceLevel > InternalTraceLevel.Off)	
+                {	
+                    string logPath = Path.Combine(Directory.GetCurrentDirectory(), logName);	
+                    streamWriter = new StreamWriter(new FileStream(logPath, FileMode.Append, FileAccess.Write, FileShare.Write));	
+                    streamWriter.AutoFlush = true;	
+                }	
+                InternalTrace.Initialize(streamWriter, traceLevel);	
+            }	
+        }	
 
-                StreamWriter streamWriter = null;
-                if (traceLevel > InternalTraceLevel.Off)
-                {
-                    string logPath = Path.Combine(Directory.GetCurrentDirectory(), logName);
-                    streamWriter = new StreamWriter(new FileStream(logPath, FileMode.Append, FileAccess.Write, FileShare.Write));
-                    streamWriter.AutoFlush = true;
-                }
-                InternalTrace.Initialize(streamWriter, traceLevel);
-            }
-        }
+        private string GetLogFileName()	
+        {	
+            const string logFileFormat = "InternalTrace.{0}.{1}.{2}";	
 
-        private string GetLogFileName()
-        {
-            const string logFileFormat = "InternalTrace.{0}.{1}.{2}";
+            // Some mobiles don't have an Open With menu item,	
+            // so we use .txt, which is opened easily.	
+            const string ext = "log";	
+            var baseName = _testAssembly != null	
+                ? _testAssembly.GetName().Name	
+                : _options.InputFile != null	
+                    ? Path.GetFileNameWithoutExtension(_options.InputFile)	
+                    : "NUnitLite";	
 
-            // Some mobiles don't have an Open With menu item,
-            // so we use .txt, which is opened easily.
-            const string ext = "log";
-            var baseName = _testAssembly != null
-                ? _testAssembly.GetName().Name
-                : _options.InputFile != null
-                    ? Path.GetFileNameWithoutExtension(_options.InputFile)
-                    : "NUnitLite";
+            var id = Process.GetCurrentProcess().Id;	
 
-            var id = Process.GetCurrentProcess().Id;
+            return string.Format(logFileFormat, id, baseName, ext);	
+        }	
 
-            return string.Format(logFileFormat, id, baseName, ext);
-        }
+        #endregion	
 
-        #endregion
+        #region ITestListener Members	
 
-        #region ITestListener Members
+        /// <summary>	
+        /// Called when a test or suite has just started	
+        /// </summary>	
+        /// <param name="test">The test that is starting</param>	
+        public void TestStarted(ITest test)	
+        {	
+            if (_teamCity != null)	
+                _teamCity.TestStarted(test);	
 
-        /// <summary>
-        /// Called when a test or suite has just started
-        /// </summary>
-        /// <param name="test">The test that is starting</param>
-        public void TestStarted(ITest test)
-        {
-            if (_teamCity != null)
-                _teamCity.TestStarted(test);
+            _textUI.TestStarted(test);	
+        }	
 
-            _textUI.TestStarted(test);
-        }
+        /// <summary>	
+        /// Called when a test has finished	
+        /// </summary>	
+        /// <param name="result">The result of the test</param>	
+        public void TestFinished(ITestResult result)	
+        {	
+            if (_teamCity != null)	
+                _teamCity.TestFinished(result);	
 
-        /// <summary>
-        /// Called when a test has finished
-        /// </summary>
-        /// <param name="result">The result of the test</param>
-        public void TestFinished(ITestResult result)
-        {
-            if (_teamCity != null)
-                _teamCity.TestFinished(result);
+            _textUI.TestFinished(result);	
+        }	
 
-            _textUI.TestFinished(result);
-        }
+        /// <summary>	
+        /// Called when a test produces output for immediate display	
+        /// </summary>	
+        /// <param name="output">A TestOutput object containing the text to display</param>	
+        public void TestOutput(TestOutput output)	
+        {	
+            _textUI.TestOutput(output);	
+        }	
 
-        /// <summary>
-        /// Called when a test produces output for immediate display
-        /// </summary>
-        /// <param name="output">A TestOutput object containing the text to display</param>
-        public void TestOutput(TestOutput output)
-        {
-            _textUI.TestOutput(output);
-        }
+        /// <summary>	
+        /// Called when a test produces a message to be sent to listeners	
+        /// </summary>	
+        /// <param name="message">A TestMessage object containing the text to send</param>	
+        public void SendMessage(TestMessage message)	
+        {	
 
-        /// <summary>
-        /// Called when a test produces a message to be sent to listeners
-        /// </summary>
-        /// <param name="message">A TestMessage object containing the text to send</param>
-        public void SendMessage(TestMessage message)
-        {
+        }	
 
-        }
-
-        #endregion
-    }
+        #endregion	
+    }	
 }
