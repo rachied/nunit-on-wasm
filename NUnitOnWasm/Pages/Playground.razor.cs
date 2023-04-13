@@ -55,6 +55,10 @@ public partial class Playground
 
          await runner
             .RunMutationTests(await Editor.GetValue());
+
+         var mutatedCode = runner.MutatedTree.ToFullString();
+
+         await Editor.SetValue(mutatedCode);
     }
 
     public async Task CompileAndRun()

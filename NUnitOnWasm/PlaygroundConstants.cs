@@ -4,24 +4,30 @@ public class PlaygroundConstants
 {
     public static TimeSpan TestSuiteMaxDuration = TimeSpan.FromSeconds(5);
     
-    public static string UnitTestClassExample = @"using System;
+    public static string UnitTestClassExample = @"using Playground.Example.Source;
 using NUnit.Framework;
 
 namespace Playground.Example.Tests 
 {
     [TestFixture]
-    public class MyTestClass
+    public class RoboBarTests
     {
         [Test]
-        public void PassingTest()
+        public void RoboBar_OffersBeer_When_CustomerIs18Plus()
         {
-            Assert.That(1 == 1);
+            var bar = new RoboBar();
+            var response = bar.GetGreeting(19);
+
+            Assert.That(response, Is.EqualTo(""Here have a beer!""));
         }
 
-        [TestCase(40,40)]
-        public void Parameterized_Test(int a, int b)
+        [Test]
+        public void RoboBar_DeniesService_When_CustomerIsUnderage()
         {
-            Assert.That(a == b);
+            var bar = new RoboBar();
+            var response = bar.GetGreeting(17);
+
+            Assert.That(response, Is.EqualTo(""Sorry not today!""));
         }
     }
 }";

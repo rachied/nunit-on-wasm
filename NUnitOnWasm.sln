@@ -4,6 +4,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NUnitOnWasm", "NUnitOnWasm\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Stryker.Core.Primitives", "Stryker.Core.Primitives\Stryker.Core.Primitives.csproj", "{9154E1ED-F5D4-4FC8-AA6E-AB37526235C2}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestProject1", "TestProject1\TestProject1.csproj", "{C4F3221B-3F53-43BE-93AC-F2316D52AA17}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -18,5 +20,9 @@ Global
 		{9154E1ED-F5D4-4FC8-AA6E-AB37526235C2}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{9154E1ED-F5D4-4FC8-AA6E-AB37526235C2}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{9154E1ED-F5D4-4FC8-AA6E-AB37526235C2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C4F3221B-3F53-43BE-93AC-F2316D52AA17}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C4F3221B-3F53-43BE-93AC-F2316D52AA17}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C4F3221B-3F53-43BE-93AC-F2316D52AA17}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C4F3221B-3F53-43BE-93AC-F2316D52AA17}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

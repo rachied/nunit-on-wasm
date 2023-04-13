@@ -24,6 +24,9 @@ public class TestWorker : ITestWorker
 {
     private readonly HttpClient _httpClient;
 
+    public CsharpMutantOrchestrator CsharpMutantOrchestrator { get; set; }
+    public SyntaxNode MutatedTree { get; set; }
+
     public TestWorker(HttpClient httpClient)
     {
         _httpClient = httpClient;
@@ -46,41 +49,85 @@ public class TestWorker : ITestWorker
             TestCount = runner.Summary.TestCount,
         };
     }
+    
+    public async Task<TestResultSummary> RunTests(Assembly assembly)
+    { 
+        var args = new[] { "--noresult", "--labels=ON" };	
+        var writer = new ExtendedTextWrapper(Console.Out);
+        var runner = new WasmRunner(assembly);
+        
+        runner.Execute(writer, TextReader.Null, args);
+        
+        return new TestResultSummary()
+        {
+            FailedCount = runner.Summary.FailedCount,
+            TestCount = runner.Summary.TestCount,
+        };
+    }
 
     public async Task RunMutationTests(string sourceCode)
     {
-        var mutatedAssembly = await GetCompilingMutantAssemblies(sourceCode);
+        var initialTestResults = await RunTests(sourceCode);
+
+        if (initialTestResults.TestCount == 0 || initialTestResults.FailedCount > 0)
+        {
+            Console.WriteLine("Error: Initial test run failed");
+            return;
+        }
+
+        Console.WriteLine("Initial test run succeeded!");
+
+        (var mutatedAssembly, var mutants) = await CompileMutations(sourceCode);
+
+        if (mutatedAssembly is null)
+        {
+            Console.WriteLine("Error: Mutated assembly is null");
+            return;
+        }
+
+        foreach (var mutant in mutants.Where(x => x.Id >= 3))
+        {
+            Console.WriteLine($"PRE: The env var is currently set to {Environment.GetEnvironmentVariable("ActiveMutation")}");
+            Console.WriteLine("Running the test suite with active mutation: " + mutant.Id);
+            Environment.SetEnvironmentVariable("ActiveMutation", mutant.Id.ToString());
+            Console.WriteLine($"POST: The env var is currently set to {Environment.GetEnvironmentVariable("ActiveMutation")}");
+            
+            var results = await RunTests(mutatedAssembly);
+
+            if (results.TestCount == 0)
+            {
+                Console.WriteLine($"Error: No test cases were detected for mutant {mutant.Id}");
+                continue;
+            }
+
+            var status = results.FailedCount > 0 ? "killed" : "survived";
+            
+            Console.WriteLine($"Finished test run! Mutation {mutant.Id} status: {status}");
+        }
+        
     }
 
-    private async Task<Assembly> GetCompilingMutantAssemblies(string sourceCode)
+    private async Task<(Assembly?, List<Mutant>)> CompileMutations(string sourceCode)
     {
-        try
-        {
-            var orchestrator = new CsharpMutantOrchestrator();
+        CsharpMutantOrchestrator = new CsharpMutantOrchestrator();
 
-            var tree = SyntaxFactory.ParseSyntaxTree(sourceCode.Trim());
-            var root = await tree.GetRootAsync();
+        var tree = SyntaxFactory.ParseSyntaxTree(sourceCode.Trim());
+        var root = await tree.GetRootAsync();
 
         
-            Console.WriteLine("Original syntax tree:");
-            Console.WriteLine(root.ToFullString());
+        Console.WriteLine("Original syntax tree:");
+        Console.WriteLine(root.ToFullString());
 
-            var mutatedTree = orchestrator.Mutate(root);
+        MutatedTree = CsharpMutantOrchestrator.Mutate(root);
+
+        Console.WriteLine($"Mutated the syntax tree with {CsharpMutantOrchestrator.MutantCount} mutations:");
         
-            Console.WriteLine($"Mutated the syntax tree with {orchestrator.MutantCount} mutations:");
+        Console.WriteLine(MutatedTree.ToFullString());
         
-            Console.WriteLine(mutatedTree.ToFullString());
 
+        var assembly = await CompileToAssembly(MutatedTree.ToFullString());
 
-            var assembly = await CompileToAssembly(mutatedTree.ToFullString());
-
-            return assembly ?? throw new Exception("Failed to compile the mutated syntax tree");
-        }
-        catch (Exception e)
-        {
-            Console.WriteLine(e);
-            throw;
-        }
+        return (assembly, CsharpMutantOrchestrator.Mutants.ToList());
     }
 
     private async Task<Assembly?> CompileToAssembly(string sourceCode)
@@ -93,19 +140,14 @@ public class TestWorker : ITestWorker
             .WithUsings(PlaygroundConstants.DefaultNamespaces);
 
         var sourceCodeTree = SyntaxFactory.ParseSyntaxTree(sourceCode.Trim());
+        var unitTestTree = SyntaxFactory.ParseSyntaxTree(PlaygroundConstants.UnitTestClassExample.Trim());
         var injectionTrees = InjectionSyntaxTrees();
-
-        foreach (var t in injectionTrees)
-        {
-            Console.WriteLine("Injecting helper class:");
-            Console.WriteLine((await t.GetRootAsync()).ToFullString());
-        }
 
         var isoDateTime = DateTime.Now.ToString("yyyyMMddTHHmmss");
         var compilation = CSharpCompilation.Create($"PlaygroundBuild-{isoDateTime}.dll")
             .WithOptions(compilationOptions)
             .WithReferences(refs)
-            .AddSyntaxTrees(sourceCodeTree)
+            .AddSyntaxTrees(sourceCodeTree, unitTestTree)
             .AddSyntaxTrees(injectionTrees);
 
         await using var codeStream = new MemoryStream();
