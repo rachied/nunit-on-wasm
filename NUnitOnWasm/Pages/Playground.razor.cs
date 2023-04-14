@@ -77,10 +77,18 @@ public partial class Playground
             }
         }
 
+        var textResponse = string.Empty;
+        
         foreach (var mutant in mutants)
         {
-            Console.WriteLine(mutant.ResultStatus + " " + mutant.DisplayName);
+            textResponse+= mutant.ResultStatus + " " + mutant.DisplayName + "\n";
         }
+        
+        var mutationScore = ((double)mutants.Count(x => x.ResultStatus != MutantStatus.Survived) / mutants.Count) * 100;
+
+        textResponse += $"Your mutation score is {mutationScore:N2}%";
+
+        await Alert(textResponse);
     }
 
     public async Task CompileAndRun()
