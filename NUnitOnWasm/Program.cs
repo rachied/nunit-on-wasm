@@ -15,6 +15,7 @@ builder.Services.AddBlazorJSRuntime();
 builder.Services.AddWebWorkerService();
 
 builder.Services.AddSingleton<ITestWorker, TestWorker>();
+builder.Services.AddSingleton<IMutationTester, MutationTester>();
 
 builder.Services.AddSingleton(sp => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
 

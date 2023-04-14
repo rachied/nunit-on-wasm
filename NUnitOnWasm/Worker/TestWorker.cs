@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using System.Collections.Immutable;
+using System.Diagnostics;
 using System.Reflection;
 using System.Text;
 using Microsoft.CodeAnalysis;
@@ -17,7 +18,9 @@ public interface ITestWorker
 {
     public Task<TestResultSummary> RunTests(string sourceCode);
 
-    public Task RunMutationTests(string sourceCode);
+    public Task<(byte[]?, List<Mutant>)> MutateAndCompile(string sourceCode);
+
+    public Task<byte[]?> Compile(string sourceCode);
 }
 
 public class TestWorker : ITestWorker
@@ -32,89 +35,19 @@ public class TestWorker : ITestWorker
         _httpClient = httpClient;
         ApplicationLogging.LoggerFactory ??= NullLoggerFactory.Instance;
     }
-    
-    public async Task<TestResultSummary> RunTests(string sourceCode)
+
+    public Task<TestResultSummary> RunTests(string sourceCode)
     {
-        var assembly = await CompileToAssembly(sourceCode);
-        
-        var args = new[] { "--noresult", "--labels=ON" };	
-        var writer = new ExtendedTextWrapper(Console.Out);
-        var runner = new WasmRunner(assembly);
-        
-        runner.Execute(writer, TextReader.Null, args);
-        
-        return new TestResultSummary()
-        {
-            FailedCount = runner.Summary.FailedCount,
-            TestCount = runner.Summary.TestCount,
-        };
-    }
-    
-    public async Task<TestResultSummary> RunTests(Assembly assembly)
-    { 
-        var args = new[] { "--noresult", "--labels=ON" };	
-        var writer = new ExtendedTextWrapper(Console.Out);
-        var runner = new WasmRunner(assembly);
-        
-        runner.Execute(writer, TextReader.Null, args);
-        
-        return new TestResultSummary()
-        {
-            FailedCount = runner.Summary.FailedCount,
-            TestCount = runner.Summary.TestCount,
-        };
+        throw new NotImplementedException();
     }
 
-    public async Task RunMutationTests(string sourceCode)
-    {
-        var initialTestResults = await RunTests(sourceCode);
-
-        if (initialTestResults.TestCount == 0 || initialTestResults.FailedCount > 0)
-        {
-            Console.WriteLine("Error: Initial test run failed");
-            return;
-        }
-
-        Console.WriteLine("Initial test run succeeded!");
-
-        (var mutatedAssembly, var mutants) = await CompileMutations(sourceCode);
-
-        if (mutatedAssembly is null)
-        {
-            Console.WriteLine("Error: Mutated assembly is null");
-            return;
-        }
-
-        foreach (var mutant in mutants.Where(x => x.Id >= 3))
-        {
-            Console.WriteLine($"PRE: The env var is currently set to {Environment.GetEnvironmentVariable("ActiveMutation")}");
-            Console.WriteLine("Running the test suite with active mutation: " + mutant.Id);
-            Environment.SetEnvironmentVariable("ActiveMutation", mutant.Id.ToString());
-            Console.WriteLine($"POST: The env var is currently set to {Environment.GetEnvironmentVariable("ActiveMutation")}");
-            
-            var results = await RunTests(mutatedAssembly);
-
-            if (results.TestCount == 0)
-            {
-                Console.WriteLine($"Error: No test cases were detected for mutant {mutant.Id}");
-                continue;
-            }
-
-            var status = results.FailedCount > 0 ? "killed" : "survived";
-            
-            Console.WriteLine($"Finished test run! Mutation {mutant.Id} status: {status}");
-        }
-        
-    }
-
-    private async Task<(Assembly?, List<Mutant>)> CompileMutations(string sourceCode)
+    public async Task<(byte[]?, List<Mutant>)> MutateAndCompile(string sourceCode)
     {
         CsharpMutantOrchestrator = new CsharpMutantOrchestrator();
 
         var tree = SyntaxFactory.ParseSyntaxTree(sourceCode.Trim());
         var root = await tree.GetRootAsync();
 
-        
         Console.WriteLine("Original syntax tree:");
         Console.WriteLine(root.ToFullString());
 
@@ -125,12 +58,12 @@ public class TestWorker : ITestWorker
         Console.WriteLine(MutatedTree.ToFullString());
         
 
-        var assembly = await CompileToAssembly(MutatedTree.ToFullString());
+        var bytes = await Compile(MutatedTree.ToFullString());
 
-        return (assembly, CsharpMutantOrchestrator.Mutants.ToList());
+        return (bytes, CsharpMutantOrchestrator.Mutants.ToList());
     }
 
-    private async Task<Assembly?> CompileToAssembly(string sourceCode)
+    public async Task<byte[]?> Compile(string sourceCode)
     {
         var refs = await GetDefaultReferences();
         
@@ -162,8 +95,8 @@ public class TestWorker : ITestWorker
         sw.Stop();
         
         Console.WriteLine($"Compilation took {sw.ElapsedMilliseconds} ms");
-        
-        return Assembly.Load(codeStream.ToArray());
+
+        return codeStream.ToArray();
     }
 
     private static List<SyntaxTree> InjectionSyntaxTrees()

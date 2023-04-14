@@ -5,7 +5,7 @@ public class Tests
     [SetUp]
     public void SetUp()
     {
-        Environment.SetEnvironmentVariable("ActiveMutation", "3");
+        Environment.SetEnvironmentVariable("ActiveMutation", "5");
     }
     
     [Test]

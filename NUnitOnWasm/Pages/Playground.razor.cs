@@ -12,6 +12,7 @@ using NUnitOnWasm.TestRunner;
 using NUnitOnWasm.Worker;
 using SpawnDev.BlazorJS.WebWorkers;
 using Stryker.Core.Primitives.Logging;
+using Stryker.Core.Primitives.Mutants;
 
 namespace NUnitOnWasm.Pages;
 
@@ -49,16 +50,37 @@ public partial class Playground
     public async Task Mutate()
     {
         _webWorker ??= await WebWorkerService.GetWebWorker();
-        ApplicationLogging.LoggerFactory = LoggerFactory;
+        
+        var runner = _webWorker.GetService<IMutationTester>();
 
-        var runner = new TestWorker(HttpClient);
+        var compiler = new TestWorker(HttpClient);
 
-         await runner
-            .RunMutationTests(await Editor.GetValue());
+        (var bytes, var mutants) = await compiler.MutateAndCompile(await Editor.GetValue());
 
-         var mutatedCode = runner.MutatedTree.ToFullString();
+        if (bytes is null)
+        {
+            Console.WriteLine("Error: byte array from compilation is null");
+            return;
+        }
 
-         await Editor.SetValue(mutatedCode);
+        foreach (var mutant in mutants)
+        {
+            try
+            {
+                var survived = await runner.TestMutation(bytes, mutant.Id);
+
+                mutant.ResultStatus = survived ? MutantStatus.Survived : MutantStatus.Killed;
+            }
+            catch (TimeoutException e)
+            {
+                mutant.ResultStatus = MutantStatus.Timeout;
+            }
+        }
+
+        foreach (var mutant in mutants)
+        {
+            Console.WriteLine(mutant.ResultStatus + " " + mutant.DisplayName);
+        }
     }
 
     public async Task CompileAndRun()
@@ -67,8 +89,6 @@ public partial class Playground
         var code = await Editor.GetValue();
         
         _webWorker ??= await WebWorkerService.GetWebWorker();
-        
-        Console.WriteLine($"Max worker count is {WebWorkerService.MaxWorkerCount}");
         
         var runner = _webWorker.GetService<ITestWorker>();
 
@@ -108,46 +128,6 @@ public partial class Playground
                 await Alert($"Test suite exceeded timeout of {PlaygroundConstants.TestSuiteMaxDuration.TotalMilliseconds} ms");
             }
         }
-    }
-
-    private async Task<Assembly?> CompileToAssembly(string sourceCode)
-    {
-        await AddNetCoreDefaultReferences();
-        
-        var compilationOptions = new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, concurrentBuild: false, optimizationLevel: OptimizationLevel.Release)
-            .WithUsings(PlaygroundConstants.DefaultNamespaces);
-
-        var tree = SyntaxFactory.ParseSyntaxTree(sourceCode.Trim());
-        
-        var isoDateTime = DateTime.Now.ToString("yyyyMMddTHHmmss");
-        var compilation = CSharpCompilation.Create($"PlaygroundBuild-{isoDateTime}.dll")
-            .WithOptions(compilationOptions)
-            .WithReferences(_references)
-            .AddSyntaxTrees(tree);
-        
-        await using var codeStream = new MemoryStream();
-        
-        var compilationResult = compilation.Emit(codeStream);
-        
-        if (!compilationResult.Success)
-        {
-            await OnCompilationError(compilationResult);
-            return null;
-        }
-        
-        return Assembly.Load(codeStream.ToArray());
-    }
-
-    private async Task OnCompilationError(EmitResult compilationResult)
-    {
-        var diagnostics = compilationResult.Diagnostics
-            .Select(x => x.ToString())
-            .ToList()
-            .Prepend("Build failed.");
-
-        var errorMessage = string.Join("\n", diagnostics);
-
-        await Alert(errorMessage);
     }
 
     private async Task Alert(string message) => await JsRuntime.InvokeVoidAsync("alert", message);
