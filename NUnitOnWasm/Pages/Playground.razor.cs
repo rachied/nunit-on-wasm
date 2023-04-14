@@ -29,21 +29,29 @@ public partial class Playground
     
     [Inject] public ILoggerFactory LoggerFactory { get; set; }
     
-    private StandaloneCodeEditor? Editor { get; set; }
-
+    private StandaloneCodeEditor? SourceCodeEditor { get; set; }
+    
+    private StandaloneCodeEditor? TestCodeEditor { get; set; }
+    
     private readonly List<MetadataReference> _references = new();
     
     private WebWorker? _webWorker;
-    
+
     private StandaloneEditorConstructionOptions EditorConstructionOptions(StandaloneCodeEditor editor)
     {
         return new StandaloneEditorConstructionOptions
         {
             AutomaticLayout = true,
             Language = "csharp",
-            Value = PlaygroundConstants.SourceCodeExample,
-            Minimap = new EditorMinimapOptions(){ Enabled = false, },
-            
+            Theme = "vs-dark",
+            Value = editor.Id.StartsWith("test") 
+                ? PlaygroundConstants.UnitTestClassExample 
+                : PlaygroundConstants.SourceCodeExample,
+            Minimap = new EditorMinimapOptions()
+            {
+                Enabled = false,
+            },
+            SmoothScrolling = true,
         };
     }
 
@@ -55,7 +63,7 @@ public partial class Playground
 
         var compiler = new TestWorker(HttpClient);
 
-        (var bytes, var mutants) = await compiler.MutateAndCompile(await Editor.GetValue());
+        (var bytes, var mutants) = await compiler.MutateAndCompile(await SourceCodeEditor.GetValue());
 
         if (bytes is null)
         {
@@ -94,7 +102,7 @@ public partial class Playground
     public async Task CompileAndRun()
     {
         var timedOut = false;
-        var code = await Editor.GetValue();
+        var code = await SourceCodeEditor.GetValue();
         
         _webWorker ??= await WebWorkerService.GetWebWorker();
         

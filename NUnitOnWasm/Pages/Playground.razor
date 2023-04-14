@@ -1,7 +1,17 @@
 ﻿@page "/"
 @page "/playground"
 
-<h3>Playground</h3>
-
 <button onclick="@(async () => await Mutate())">Run</button>
-<StandaloneCodeEditor @ref="Editor" Id="code-editor" ConstructionOptions="EditorConstructionOptions" />
+
+<div class="container">
+    
+    <div class="mt-1 col-12">
+        <h3>Unit tests</h3>
+        <StandaloneCodeEditor @ref="TestCodeEditor" Id="test-code-editor" ConstructionOptions="EditorConstructionOptions"/>
+    </div>
+    
+    <div class="mt-1 col-12">
+        <h3>System under test</h3>
+        <StandaloneCodeEditor @ref="SourceCodeEditor" Id="source-code-editor" ConstructionOptions="EditorConstructionOptions"/>
+    </div>
+</div>

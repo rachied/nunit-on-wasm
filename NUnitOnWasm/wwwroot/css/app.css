@@ -100,7 +100,12 @@ a, .btn-link {
     content: var(--blazor-load-percentage-text, "Loading");
 }
 
-#code-editor{
-    min-height: 500px;
-    height: 50vh;
+#source-code-editor {
+    min-height: 350px !important;
+    min-width: 350px !important;
+}
+
+#test-code-editor {
+    min-height: 350px !important;
+    min-width: 350px !important;
 }
