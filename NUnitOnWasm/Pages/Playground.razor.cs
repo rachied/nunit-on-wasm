@@ -63,7 +63,7 @@ public partial class Playground
 
         var compiler = new TestWorker(HttpClient);
 
-        (var bytes, var mutants) = await compiler.MutateAndCompile(await SourceCodeEditor.GetValue());
+        (var bytes, var mutants) = await compiler.MutateAndCompile(await SourceCodeEditor.GetValue(), await TestCodeEditor.GetValue());
 
         if (bytes is null)
         {

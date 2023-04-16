@@ -40,7 +40,7 @@ namespace Playground.Example.Source
     {
         public string GetGreeting(int age)
         {
-            if(age > 18)
+            if(age >= 18)
             {
                 return ""Here have a beer!"";
             }

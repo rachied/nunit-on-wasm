@@ -18,9 +18,9 @@ public interface ITestWorker
 {
     public Task<TestResultSummary> RunTests(string sourceCode);
 
-    public Task<(byte[]?, List<Mutant>)> MutateAndCompile(string sourceCode);
+    public Task<(byte[]?, List<Mutant>)> MutateAndCompile(string sourceCode, string testCode);
 
-    public Task<byte[]?> Compile(string sourceCode);
+    public Task<byte[]?> Compile(string sourceCode, string testCode);
 }
 
 public class TestWorker : ITestWorker
@@ -41,29 +41,29 @@ public class TestWorker : ITestWorker
         throw new NotImplementedException();
     }
 
-    public async Task<(byte[]?, List<Mutant>)> MutateAndCompile(string sourceCode)
+    public async Task<(byte[]?, List<Mutant>)> MutateAndCompile(string sourceCode, string testCode)
     {
         CsharpMutantOrchestrator = new CsharpMutantOrchestrator();
 
-        var tree = SyntaxFactory.ParseSyntaxTree(sourceCode.Trim());
-        var root = await tree.GetRootAsync();
+        var sourceCodeTree = SyntaxFactory.ParseSyntaxTree(sourceCode.Trim());
+        var sourceCodeRoot = await sourceCodeTree.GetRootAsync();
 
         Console.WriteLine("Original syntax tree:");
-        Console.WriteLine(root.ToFullString());
+        Console.WriteLine(sourceCodeRoot.ToFullString());
 
-        MutatedTree = CsharpMutantOrchestrator.Mutate(root);
+        MutatedTree = CsharpMutantOrchestrator.Mutate(sourceCodeRoot);
 
         Console.WriteLine($"Mutated the syntax tree with {CsharpMutantOrchestrator.MutantCount} mutations:");
         
         Console.WriteLine(MutatedTree.ToFullString());
         
 
-        var bytes = await Compile(MutatedTree.ToFullString());
+        var bytes = await Compile(MutatedTree.ToFullString(), testCode);
 
         return (bytes, CsharpMutantOrchestrator.Mutants.ToList());
     }
 
-    public async Task<byte[]?> Compile(string sourceCode)
+    public async Task<byte[]?> Compile(string sourceCode, string testCode)
     {
         var refs = await GetDefaultReferences();
         
@@ -73,7 +73,7 @@ public class TestWorker : ITestWorker
             .WithUsings(PlaygroundConstants.DefaultNamespaces);
 
         var sourceCodeTree = SyntaxFactory.ParseSyntaxTree(sourceCode.Trim());
-        var unitTestTree = SyntaxFactory.ParseSyntaxTree(PlaygroundConstants.UnitTestClassExample.Trim());
+        var unitTestTree = SyntaxFactory.ParseSyntaxTree(testCode);
         var injectionTrees = InjectionSyntaxTrees();
 
         var isoDateTime = DateTime.Now.ToString("yyyyMMddTHHmmss");

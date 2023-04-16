@@ -101,11 +101,11 @@ a, .btn-link {
 }
 
 #source-code-editor {
-    min-height: 350px !important;
+    min-height: 500px !important;
     min-width: 350px !important;
 }
 
 #test-code-editor {
-    min-height: 350px !important;
+    min-height: 500px !important;
     min-width: 350px !important;
 }
