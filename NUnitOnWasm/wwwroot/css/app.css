@@ -102,10 +102,12 @@ a, .btn-link {
 
 #source-code-editor {
     min-height: 500px !important;
-    min-width: 350px !important;
 }
 
 #test-code-editor {
     min-height: 500px !important;
-    min-width: 350px !important;
+}
+
+.article-bg-dark {
+    background-color: #1b1b1d;
 }
