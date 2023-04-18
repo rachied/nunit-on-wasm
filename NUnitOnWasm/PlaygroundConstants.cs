@@ -12,6 +12,7 @@ public class PlaygroundConstants
         {
             Background = "#000000",
         },
+        Columns = 160
     };
     
     public static TimeSpan TestSuiteMaxDuration = TimeSpan.FromSeconds(5);

@@ -1,49 +1,39 @@
-﻿using System.Collections.Immutable;
-using System.Diagnostics;
-using System.Reflection;
+﻿using System.Diagnostics;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.Extensions.Logging.Abstractions;
-using NUnit.Common;
-using NUnitOnWasm.TestRunner;
 using Stryker.Core.Primitives.InjectedHelpers;
 using Stryker.Core.Primitives.Logging;
 using Stryker.Core.Primitives.Mutants;
-using Stryker.Core.Primitives.Options;
 
 namespace NUnitOnWasm.Worker;
 
-public interface ITestWorker
+public interface IRoslynWorker
 {
-    public Task<TestResultSummary> RunTests(string sourceCode);
-
     public Task<(byte[]?, List<Mutant>)> MutateAndCompile(string sourceCode, string testCode);
 
-    public Task<byte[]?> Compile(string sourceCode, string testCode);
+    public Task<(byte[]?, List<string>)> Compile(string sourceCode, string testCode);
 }
 
-public class TestWorker : ITestWorker
+public class RoslynWorker : IRoslynWorker
 {
     private readonly HttpClient _httpClient;
 
-    public CsharpMutantOrchestrator CsharpMutantOrchestrator { get; set; }
-    public SyntaxNode MutatedTree { get; set; }
-
-    public TestWorker(HttpClient httpClient)
+    public RoslynWorker(HttpClient httpClient)
     {
         _httpClient = httpClient;
-        ApplicationLogging.LoggerFactory ??= NullLoggerFactory.Instance;
+        ApplicationLogging.LoggerFactory = NullLoggerFactory.Instance;
     }
 
-    public Task<TestResultSummary> RunTests(string sourceCode)
+    public Task<TestResultSummary> RunTests(string sourceCode, string testCode)
     {
         throw new NotImplementedException();
     }
 
     public async Task<(byte[]?, List<Mutant>)> MutateAndCompile(string sourceCode, string testCode)
     {
-        CsharpMutantOrchestrator = new CsharpMutantOrchestrator();
+        var orchestrator = new CsharpMutantOrchestrator();
 
         var sourceCodeTree = SyntaxFactory.ParseSyntaxTree(sourceCode.Trim());
         var sourceCodeRoot = await sourceCodeTree.GetRootAsync();
@@ -51,30 +41,31 @@ public class TestWorker : ITestWorker
         Console.WriteLine("Original syntax tree:");
         Console.WriteLine(sourceCodeRoot.ToFullString());
 
-        MutatedTree = CsharpMutantOrchestrator.Mutate(sourceCodeRoot);
+        var mutatedTree = orchestrator.Mutate(sourceCodeRoot);
 
-        Console.WriteLine($"Mutated the syntax tree with {CsharpMutantOrchestrator.MutantCount} mutations:");
+        Console.WriteLine($"Mutated the syntax tree with {orchestrator.MutantCount} mutations:");
         
-        Console.WriteLine(MutatedTree.ToFullString());
+        Console.WriteLine(mutatedTree.ToFullString());
         
 
-        var bytes = await Compile(MutatedTree.ToFullString(), testCode);
+        var (bytes, errors) = await Compile(mutatedTree.ToFullString(), testCode);
 
-        return (bytes, CsharpMutantOrchestrator.Mutants.ToList());
+        return (bytes, orchestrator.Mutants.ToList());
     }
 
-    public async Task<byte[]?> Compile(string sourceCode, string testCode)
+    public async Task<(byte[]?, List<string>)> Compile(string sourceCode, string testCode)
     {
-        var refs = await GetDefaultReferences();
+        var refs = await LoadDefaultReferences();
         
-        var sw = new Stopwatch();
-        sw.Start();
-        var compilationOptions = new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, concurrentBuild: false, optimizationLevel: OptimizationLevel.Release)
+        var compilationOptions = new CSharpCompilationOptions(
+                OutputKind.DynamicallyLinkedLibrary, 
+                concurrentBuild: false, // WASM does not support concurrent builds
+                optimizationLevel: OptimizationLevel.Release)
             .WithUsings(PlaygroundConstants.DefaultNamespaces);
 
         var sourceCodeTree = SyntaxFactory.ParseSyntaxTree(sourceCode.Trim());
         var unitTestTree = SyntaxFactory.ParseSyntaxTree(testCode);
-        var injectionTrees = InjectionSyntaxTrees();
+        var injectionTrees = GetInstrumentationSyntaxTrees();
 
         var isoDateTime = DateTime.Now.ToString("yyyyMMddTHHmmss");
         var compilation = CSharpCompilation.Create($"PlaygroundBuild-{isoDateTime}.dll")
@@ -86,20 +77,20 @@ public class TestWorker : ITestWorker
         await using var codeStream = new MemoryStream();
         
         var compilationResult = compilation.Emit(codeStream);
-        
+
         if (!compilationResult.Success)
         {
-            return null;
-        }
-        
-        sw.Stop();
-        
-        Console.WriteLine($"Compilation took {sw.ElapsedMilliseconds} ms");
+            var errors = compilationResult.Diagnostics
+                .Where(d => d.Severity == DiagnosticSeverity.Error)
+                .Select(d => d.GetMessage()).ToList();
 
-        return codeStream.ToArray();
+            return (null, errors);
+        }
+
+        return (codeStream.ToArray(), new List<string>());
     }
 
-    private static List<SyntaxTree> InjectionSyntaxTrees()
+    private static List<SyntaxTree> GetInstrumentationSyntaxTrees()
     {
         var trees = new List<SyntaxTree>();
         
@@ -112,11 +103,8 @@ public class TestWorker : ITestWorker
         return trees;
     }
     
-    private async Task<List<MetadataReference>> GetDefaultReferences()
+    private async Task<List<MetadataReference>> LoadDefaultReferences()
     {
-        var sw = new Stopwatch();
-        sw.Start();
-        
         var references = new List<MetadataReference>();
         
         foreach (var lib in PlaygroundConstants.DefaultLibraries)
@@ -125,10 +113,6 @@ public class TestWorker : ITestWorker
             references.Add(MetadataReference.CreateFromStream(referenceStream));
         }
         
-        sw.Stop();
-        
-        Console.WriteLine($"Downloading assemblies took {sw.ElapsedMilliseconds} ms");
-
         return references;
     }
 }

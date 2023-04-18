@@ -2,7 +2,9 @@
 @page "/playground"
 
 <div class="container-fluid">
-    <button style="" type="button" class="btn btn-outline-success" onclick="@(async () => await Mutate())">Run</button>
+    <button style="" type="button" class="btn btn-outline-success" onclick="@(async () => await Mutate())">Run Mutation Tests</button>
+    <button style="" type="button" class="btn btn-outline-secondary" onclick="@(async () => await CompileAndRun())">Run Unit Tests</button>
+    
     <div class="row">
         <div class="mt-1 col-6">
             <h3 style="display:inline-block" class="text-white">Unit tests</h3>
@@ -17,6 +19,6 @@
     </div>
     
     <div class="row">
-        <Xterm @ref="Terminal" Options="PlaygroundConstants.XTermOptions" OnFirstRender="@OnFirstRender" />
+        <Xterm @ref="Terminal" Options="PlaygroundConstants.XTermOptions"  />
     </div>
 </div>

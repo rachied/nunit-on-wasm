@@ -1,19 +1,12 @@
-using System.Reflection;
 using BlazorMonaco.Editor;
 using Microsoft.AspNetCore.Components;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.Emit;
 using Microsoft.JSInterop;
-using NUnit.Common;
-using NUnit.Framework.Interfaces;
-using NUnitLite;
-using NUnitOnWasm.TestRunner;
 using NUnitOnWasm.Worker;
 using SpawnDev.BlazorJS.WebWorkers;
-using Stryker.Core.Primitives.Logging;
 using Stryker.Core.Primitives.Mutants;
 using XtermBlazor;
+using static Crayon.Output;
 
 namespace NUnitOnWasm.Pages;
 
@@ -57,25 +50,21 @@ public partial class Playground
             SmoothScrolling = true,
         };
     }
-    
-    private async Task OnFirstRender()
-    {
-        await Terminal.WriteLine("Welcome to the Stryker Playground");
-    }
 
     public async Task Mutate()
     {
+        Terminal.Reset();
         _webWorker ??= await WebWorkerService.GetWebWorker();
         
         var runner = _webWorker.GetService<IMutationTester>();
 
-        var compiler = new TestWorker(HttpClient);
+        var compiler = new RoslynWorker(HttpClient);
 
-        (var bytes, var mutants) = await compiler.MutateAndCompile(await SourceCodeEditor.GetValue(), await TestCodeEditor.GetValue());
+        var (bytes, mutants) = await compiler.MutateAndCompile(await SourceCodeEditor.GetValue(), await TestCodeEditor.GetValue());
 
         if (bytes is null)
         {
-            Console.WriteLine("Error: byte array from compilation is null");
+            await PrintError("Error: mutated compilation failed");
             return;
         }
 
@@ -83,59 +72,93 @@ public partial class Playground
         {
             try
             {
-                var survived = await runner.TestMutation(bytes, mutant.Id);
+                var testResult = await runner.TestMutation(bytes, mutant.Id);
 
+                foreach (var line in testResult.TextOutput)
+                {
+                    await Print(line);
+                }
+                
+                await Print($"==================Finished testing Mutant #{mutant.Id}==================");
+                
+                var survived = testResult is { TestCount: > 0, FailedCount: 0 };
+                
                 mutant.ResultStatus = survived ? MutantStatus.Survived : MutantStatus.Killed;
             }
-            catch (TimeoutException e)
+            catch (TimeoutException)
             {
+                await PrintWarning($"==================Timed out Mutant #{mutant.Id}==================");
                 mutant.ResultStatus = MutantStatus.Timeout;
             }
         }
-
-        var textResponse = string.Empty;
-        
-        foreach (var mutant in mutants)
-        {
-            textResponse+= mutant.ResultStatus + " " + mutant.DisplayName + "\n";
-        }
         
         var mutationScore = ((double)mutants.Count(x => x.ResultStatus != MutantStatus.Survived) / mutants.Count) * 100;
+        var messageTxt = $"Your mutation score is {mutationScore:N2}%";
 
-        textResponse += $"Your mutation score is {mutationScore:N2}%";
+        var msg = mutationScore switch
+        {
+            > 80 => Green(Bold(messageTxt)),
+            > 60 => Yellow(Bold(messageTxt)),
+            _ => Red(Bold(messageTxt))
+        };
+        
+        await Print(msg);
 
-        await Alert(textResponse);
+        foreach (var mutant in mutants)
+        {
+            await Print(mutant.ResultStatus + " " + mutant.DisplayName);
+        }
     }
 
     public async Task CompileAndRun()
     {
+        Terminal.Reset();
         var timedOut = false;
         var code = await SourceCodeEditor.GetValue();
+        var tests = await TestCodeEditor.GetValue();
         
         _webWorker ??= await WebWorkerService.GetWebWorker();
         
-        var runner = _webWorker.GetService<ITestWorker>();
+        var compiler = new RoslynWorker(HttpClient);
+        var testWorker = _webWorker.GetService<IMutationTester>();
 
         try
         {
-            var result = await runner
-                .RunTests(code)
-                .WaitAsync(PlaygroundConstants.TestSuiteMaxDuration);
+            var (bytes, errors) = await compiler.Compile(code, tests);
 
-            if (result.TestCount == 0)
+            if (errors.Any())
             {
-                await Alert("No tests were found");
-                return;
+                await PrintError("Compilation failed!");
+                foreach (var error in errors)
+                {
+                    await PrintError(error);
+                }
+            }
+            
+            var testResult = await testWorker
+                .RunTests(bytes!)
+                .WaitAsync(PlaygroundConstants.TestSuiteMaxDuration);
+            
+            foreach (var line in testResult.TextOutput)
+            {
+                await Print(line);
             }
 
-            if (result.FailedCount > 0)
+            if (testResult.TestCount == 0)
             {
-                await Alert($"{result.FailedCount} tests failed");
+                await PrintWarning("No tests were found");
+                return;
+            }
+            
+            if (testResult.FailedCount > 0)
+            {
+                await PrintError($"{testResult.FailedCount} tests failed.");
             }
             else
             {
-                await Alert($"All {result.TestCount} tests passed, nice!");
+                await PrintSuccess($"All {testResult.TestCount} tests passed.");
             }
+
         }
         catch (TimeoutException e)
         {
@@ -149,21 +172,20 @@ public partial class Playground
 
             if (timedOut)
             {
-                await Alert($"Test suite exceeded timeout of {PlaygroundConstants.TestSuiteMaxDuration.TotalMilliseconds} ms");
+                await PrintError($"Test suite exceeded timeout of {PlaygroundConstants.TestSuiteMaxDuration.TotalMilliseconds} ms");
             }
         }
     }
 
-    private async Task Alert(string message) => await JsRuntime.InvokeVoidAsync("alert", message);
-    
-    private async Task Print(string message) => await JsRuntime.InvokeVoidAsync("console.log", message);
-
-    private async Task AddNetCoreDefaultReferences()
+    private async Task Print(string message)
     {
-        foreach (var lib in PlaygroundConstants.DefaultLibraries)
-        {
-            await using var referenceStream = await HttpClient.GetStreamAsync($"/_framework/{lib}");
-            _references.Add(MetadataReference.CreateFromStream(referenceStream));
-        }
+        await Terminal.WriteLine(message);
+        await Terminal.ScrollToBottom();
     }
+
+    private async Task PrintError(string message) => await Print(Red(Bold(message)));
+    
+    private async Task PrintWarning(string message) => await Print(Yellow(Bold(message)));
+    
+    private async Task PrintSuccess(string message) => await Print(Green(Bold(message)));
 }
