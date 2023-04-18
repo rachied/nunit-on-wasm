@@ -97,8 +97,8 @@ public partial class Playground
 
         var msg = mutationScore switch
         {
-            > 80 => Green(Bold(messageTxt)),
-            > 60 => Yellow(Bold(messageTxt)),
+            > 90 => Green(Bold(messageTxt)),
+            > 70 => Yellow(Bold(messageTxt)),
             _ => Red(Bold(messageTxt))
         };
         
