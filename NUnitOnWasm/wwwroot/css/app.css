@@ -111,3 +111,7 @@ a, .btn-link {
 .article-bg-dark {
     background-color: #1b1b1d;
 }
+
+#app {
+    min-height: 100vh;
+}
