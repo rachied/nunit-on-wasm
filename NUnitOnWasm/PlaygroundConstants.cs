@@ -1,7 +1,19 @@
-﻿namespace NUnitOnWasm;
+﻿using XtermBlazor;
+
+namespace NUnitOnWasm;
 
 public class PlaygroundConstants
 {
+    public static TerminalOptions XTermOptions = new()
+    {
+        CursorBlink = true,
+        CursorStyle = CursorStyle.Bar,
+        Theme =
+        {
+            Background = "#000000",
+        },
+    };
+    
     public static TimeSpan TestSuiteMaxDuration = TimeSpan.FromSeconds(5);
     
     public static string UnitTestClassExample = @"using Playground.Example.Source;

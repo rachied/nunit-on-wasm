@@ -14,6 +14,7 @@
         <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.6.0-1.final" />
         <PackageReference Include="SpawnDev.BlazorJS" Version="2.1.7" />
         <PackageReference Include="SpawnDev.BlazorJS.WebWorkers" Version="2.1.7" />
+        <PackageReference Include="XtermBlazor" Version="1.8.1" />
     </ItemGroup>
 
     <ItemGroup>

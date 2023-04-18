@@ -13,6 +13,7 @@ using NUnitOnWasm.Worker;
 using SpawnDev.BlazorJS.WebWorkers;
 using Stryker.Core.Primitives.Logging;
 using Stryker.Core.Primitives.Mutants;
+using XtermBlazor;
 
 namespace NUnitOnWasm.Pages;
 
@@ -32,6 +33,8 @@ public partial class Playground
     private StandaloneCodeEditor? SourceCodeEditor { get; set; }
     
     private StandaloneCodeEditor? TestCodeEditor { get; set; }
+    
+    private Xterm? Terminal { get; set; }
     
     private readonly List<MetadataReference> _references = new();
     
@@ -53,6 +56,11 @@ public partial class Playground
             },
             SmoothScrolling = true,
         };
+    }
+    
+    private async Task OnFirstRender()
+    {
+        await Terminal.WriteLine("Welcome to the Stryker Playground");
     }
 
     public async Task Mutate()
