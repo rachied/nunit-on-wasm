@@ -100,12 +100,8 @@ a, .btn-link {
     content: var(--blazor-load-percentage-text, "Loading");
 }
 
-#source-code-editor {
-    min-height: 500px !important;
-}
-
-#test-code-editor {
-    min-height: 500px !important;
+.monaco-editor-container {
+    height: 50vh; 
 }
 
 .article-bg-dark {
@@ -113,5 +109,5 @@ a, .btn-link {
 }
 
 #app {
-    min-height: 100vh;
+    height: 100vh;
 }

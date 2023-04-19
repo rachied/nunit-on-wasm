@@ -37,7 +37,7 @@ public partial class Playground
     {
         return new StandaloneEditorConstructionOptions
         {
-            AutomaticLayout = true,
+            AutomaticLayout = false,
             Language = "csharp",
             Theme = "vs-dark",
             Value = editor.Id.StartsWith("test") 
@@ -53,7 +53,7 @@ public partial class Playground
 
     public async Task Mutate()
     {
-        Terminal.Reset();
+        Terminal.Clear();
         _webWorker ??= await WebWorkerService.GetWebWorker();
         
         var runner = _webWorker.GetService<IMutationTester>();
@@ -112,7 +112,7 @@ public partial class Playground
 
     public async Task CompileAndRun()
     {
-        Terminal.Reset();
+        Terminal.Clear();
         var timedOut = false;
         var code = await SourceCodeEditor.GetValue();
         var tests = await TestCodeEditor.GetValue();

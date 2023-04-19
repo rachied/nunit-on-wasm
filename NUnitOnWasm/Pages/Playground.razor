@@ -1,24 +1,30 @@
 ﻿@page "/"
 @page "/playground"
 
-<div class="container-fluid">
-    <button style="" type="button" class="btn btn-outline-success" onclick="@(async () => await Mutate())">Run Mutation Tests</button>
-    <button style="" type="button" class="btn btn-outline-secondary" onclick="@(async () => await CompileAndRun())">Run Unit Tests</button>
+<div class="container-fluid h-100">
     
-    <div class="row">
-        <div class="mt-1 col-6">
-            <h3 style="display:inline-block" class="text-white">Unit tests</h3>
-            
-            <StandaloneCodeEditor @ref="TestCodeEditor" Id="test-code-editor" ConstructionOptions="EditorConstructionOptions"/>
-        </div>
+    <div style="max-height: 60vh" class="row">
         
-        <div class="mt-1 col-6">
+        <div class="col-6 h-auto">
+            <h3 class="text-white">Unit tests</h3>
+            <div class="row">
+                <StandaloneCodeEditor @ref="TestCodeEditor" Id="test-editor" CssClass="playground-editor" ConstructionOptions="EditorConstructionOptions"/>
+            </div>
+        </div>
+
+        <div class="col-6 h-auto">
             <h3 class="text-white">System under test</h3>
-            <StandaloneCodeEditor @ref="SourceCodeEditor" Id="source-code-editor" ConstructionOptions="EditorConstructionOptions"/>
+            <div class="row">
+                <StandaloneCodeEditor @ref="SourceCodeEditor" Id="source-editor" CssClass="playground-editor" ConstructionOptions="EditorConstructionOptions"/>
+            </div>
         </div>
     </div>
-    
+
     <div class="row">
-        <Xterm @ref="Terminal" Options="PlaygroundConstants.XTermOptions"  />
+            <div class="container">
+                <button type="button" class="btn btn-outline-success" onclick="@(async () => await Mutate())">Run Mutation Tests</button>
+                <button type="button" class="btn btn-outline-secondary" onclick="@(async () => await CompileAndRun())">Run Unit Tests</button>
+            </div>
+        <Xterm @ref="Terminal" Options="PlaygroundConstants.XTermOptions"/>
     </div>
 </div>

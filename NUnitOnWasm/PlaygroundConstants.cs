@@ -7,12 +7,12 @@ public class PlaygroundConstants
     public static TerminalOptions XTermOptions = new()
     {
         CursorBlink = true,
-        CursorStyle = CursorStyle.Bar,
+        CursorStyle = CursorStyle.Block,
         Theme =
         {
             Background = "#000000",
         },
-        Columns = 160
+        Columns = 160,
     };
     
     public static TimeSpan TestSuiteMaxDuration = TimeSpan.FromSeconds(5);
